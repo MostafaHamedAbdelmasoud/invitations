@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>خالد وشروق — دعوة زفاف</title>
+<meta name="theme-color" content="#300A13">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Aref+Ruqaa:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --wine-950:#14030A;
+  --wine-900:#1C050B;
+  --wine-800:#300A13;
+  --wine-700:#4D1422;
+  --wine-600:#681E30;
+  --gold:#D6B06A;
+  --gold-hi:#F3E0B0;
+  --gold-lo:#8E6A2E;
+  --cream:#F6F1E6;
+  --w:min(74vw, 360px);
+  --h:min(calc(var(--w) * 1.72), 62vh);
+  --display:"Aref Ruqaa", "Amiri", serif;
+  --text:"Amiri", "Times New Roman", serif;
+}
+@supports (height: 100svh){ :root{ --h:min(calc(var(--w) * 1.72), 62svh); } }
+*{box-sizing:border-box}
+html{background:var(--wine-900)}
+body{margin:0;color:var(--cream);font-family:var(--text);background:var(--wine-900);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--gold-hi);outline-offset:4px;border-radius:999px}
+
+/* a faint star-tile pattern, like carved plaster on the castle wall */
+.wall-pattern{position:fixed;inset:0;pointer-events:none;opacity:.9;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(104,30,48,.55), transparent 65%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='84' height='84' viewBox='0 0 84 84'%3E%3Cg fill='none' stroke='%23D6B06A' stroke-opacity='.075' stroke-width='1'%3E%3Cpath d='M42 10 L50 34 L74 42 L50 50 L42 74 L34 50 L10 42 L34 34Z'/%3E%3Crect x='25' y='25' width='34' height='34' transform='rotate(45 42 42)'/%3E%3Ccircle cx='42' cy='42' r='5'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* ------------------------------------------------------------------ gate (scroll-driven) */
+.gate{position:relative;height:420vh}
+.gate.farewell{height:300vh}
+@supports (height: 100svh){ .gate{height:420svh} .gate.farewell{height:300svh} }
+.stage{position:sticky;top:0;height:100vh;overflow:hidden;display:grid;place-items:center;perspective:1500px;perspective-origin:50% 45%}
+@supports (height: 100svh){ .stage{height:100svh} }
+.vignette{position:absolute;inset:0;pointer-events:none;z-index:6;background:radial-gradient(ellipse at 50% 45%, transparent 35%, rgba(12,1,5,.78) 100%)}
+
+.kicker{position:absolute;top:max(5.5vh, 28px);inset-inline:0;text-align:center;z-index:7;margin:0;padding:0 24px}
+.kicker .for{display:block;font-size:15px;color:rgba(243,224,176,.72);letter-spacing:.02em}
+.kicker .guest{display:block;margin-top:4px;font-family:var(--display);font-size:clamp(26px,7vw,34px);color:var(--gold-hi)}
+
+.hint{position:absolute;bottom:max(4.5vh, 22px);inset-inline:0;z-index:7;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:15px;color:rgba(243,224,176,.78)}
+.hint svg{width:22px;height:22px;animation:nudge 1.8s ease-in-out infinite}
+@keyframes nudge{0%,100%{transform:translateY(0);opacity:.6}50%{transform:translateY(7px);opacity:1}}
+
+.portal{position:relative;z-index:1;width:var(--w);height:var(--h);transform-style:preserve-3d;will-change:transform,opacity;margin-top:5vh}
+/* stone arch around the doorway */
+.portal::before{content:"";position:absolute;inset:-18px -18px -2px;border-radius:calc(var(--w) / 2 + 18px) calc(var(--w) / 2 + 18px) 4px 4px;
+  background:linear-gradient(180deg,#5A1828,#3B0D19 60%,#2A0811);
+  box-shadow:0 0 0 1px rgba(214,176,106,.35),0 40px 80px -30px rgba(0,0,0,.9),inset 0 0 0 6px rgba(28,5,11,.45),inset 0 0 0 7px rgba(214,176,106,.55);
+  transform:translateZ(-2px)}
+.portal::after{content:"";position:absolute;inset:-30px -30px -4px;border-radius:calc(var(--w) / 2 + 30px) calc(var(--w) / 2 + 30px) 0 0;border:1px solid rgba(214,176,106,.22);transform:translateZ(-3px);pointer-events:none}
+
+/* what is behind the doors: warm light */
+.inside{position:absolute;inset:0;border-radius:calc(var(--w) / 2) calc(var(--w) / 2) 0 0;overflow:hidden;
+  background:linear-gradient(180deg,#2A0711,#120206)}
+.inside .light{position:absolute;inset:-10%;opacity:var(--glow,0);
+  background:radial-gradient(ellipse 60% 55% at 50% 62%, #FFF2D0 0%, #F3E0B0 18%, rgba(214,176,106,.55) 42%, rgba(104,30,48,0) 72%)}
+.inside .rays{position:absolute;inset:0;opacity:calc(var(--glow,0) * .7);
+  background:repeating-conic-gradient(from 0deg at 50% 70%, rgba(255,240,205,.16) 0deg 3deg, transparent 3deg 14deg);
+  -webkit-mask-image:radial-gradient(ellipse at 50% 70%, #000 0%, transparent 70%);mask-image:radial-gradient(ellipse at 50% 70%, #000 0%, transparent 70%)}
+.inside .farewell-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 14%;
+  color:var(--wine-700);font-family:var(--display);font-size:clamp(24px,6.6vw,32px);line-height:1.35;opacity:var(--glow,0)}
+.inside .farewell-text small{display:block;margin-top:10px;font-family:var(--text);font-size:15px;color:#6B3A1E}
+
+/* light spilling onto the floor */
+.spill{position:absolute;left:50%;top:calc(50% + 2.5vh + var(--h) / 2);width:calc(var(--w) * 2);height:calc(var(--w) * .9);transform:translate(-50%, -50%);z-index:0;pointer-events:none;
+  opacity:var(--glow,0);background:radial-gradient(closest-side, rgba(243,224,176,.5), rgba(214,176,106,.16) 45%, rgba(214,176,106,0) 100%)}
+
+/* the two leaves */
+.leaf{position:absolute;top:0;bottom:0;width:50%;transform-style:preserve-3d;backface-visibility:visible;overflow:hidden;
+  background:
+    repeating-linear-gradient(90deg, rgba(0,0,0,.09) 0 1px, transparent 1px 7px, rgba(255,255,255,.025) 7px 8px, transparent 8px 13px),
+    linear-gradient(90deg,#3A0E19 0%,#5C1A2C 46%,#4A1220 100%);
+  box-shadow:inset 0 0 0 1px rgba(214,176,106,.25),inset 0 0 40px rgba(0,0,0,.45)}
+.leaf.left{left:0;transform-origin:left center;border-top-left-radius:100% calc(var(--w) / 2);transform:rotateY(calc(var(--open,0) * 104deg))}
+.leaf.right{right:0;transform-origin:right center;border-top-right-radius:100% calc(var(--w) / 2);transform:rotateY(calc(var(--open,0) * -104deg))}
+.leaf .shade{position:absolute;inset:0;background:#0A0104;opacity:calc(var(--open,0) * .55);pointer-events:none}
+
+/* carved panels */
+.panel{position:absolute;border:1.5px solid rgba(214,176,106,.6);
+  box-shadow:inset 0 0 0 5px rgba(28,5,11,.38),inset 0 0 0 6px rgba(214,176,106,.18),inset 0 0 22px rgba(0,0,0,.45)}
+.left .panel{left:20%;right:13%}
+.right .panel{left:13%;right:20%}
+.panel.top{top:13%;height:27%}
+.left .panel.top{border-top-left-radius:100% 70%}
+.right .panel.top{border-top-right-radius:100% 70%}
+.panel.bottom{top:63%;bottom:5%;border-radius:3px}
+
+/* brass studs along the outer edge */
+.studs{position:absolute;top:calc(var(--w) * .22);bottom:3%;width:10px;
+  background:radial-gradient(circle, #FBEFCB 0 1.4px, #D6B06A 1.6px 2.4px, #6E5020 2.6px 3.1px, transparent 3.3px) 50% 0 / 10px 24px repeat-y}
+.left .studs{left:6%}
+.right .studs{right:6%}
+
+/* the medallion is split down the seam: خ on the right leaf, ش on the left */
+.medal{position:absolute;top:calc(41% - 38px);width:76px;height:76px;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%, #FBEFCB, #E3C27E 34%, #B08A45 68%, #7A5C24);
+  box-shadow:0 0 0 3px rgba(28,5,11,.55),0 0 0 4px rgba(214,176,106,.7),0 8px 18px rgba(0,0,0,.45),inset 0 2px 2px rgba(255,255,255,.5)}
+.left .medal{right:-38px}
+.right .medal{left:-38px}
+.medal span{position:absolute;top:0;bottom:0;width:38px;display:grid;place-items:center;font-family:var(--display);font-size:30px;line-height:1;color:#5A3A12;text-shadow:0 1px 0 rgba(255,240,205,.7)}
+.left .medal span{left:4px}
+.right .medal span{right:4px}
+
+/* ring pulls */
+.ring{position:absolute;top:56%;width:34px;height:48px}
+.left .ring{right:10px}
+.right .ring{left:10px}
+.ring svg{width:100%;height:100%;overflow:visible;transform-origin:50% 8px;transform:rotate(calc(var(--open,0) * 18deg))}
+.right .ring svg{transform:rotate(calc(var(--open,0) * -18deg))}
+
+/* the invitation behind the door */
+.reveal{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 26px;
+  opacity:var(--card,0);transform:translateY(calc((1 - var(--card,0)) * 26px)) scale(calc(.95 + var(--card,0) * .05));pointer-events:none}
+.reveal.on{pointer-events:auto}
+.verse{margin:0;max-width:30ch;font-size:clamp(16px,4.3vw,19px);line-height:1.9;color:rgba(243,224,176,.86)}
+.lead{margin:22px 0 0;max-width:30ch;font-size:clamp(17px,4.6vw,20px);line-height:1.75;color:var(--cream)}
+.names{margin:20px 0 0;font-family:var(--display);font-weight:700;line-height:1.05;display:flex;flex-direction:column;align-items:center}
+.names .n{font-size:clamp(64px,19vw,104px);
+  background:linear-gradient(180deg,#FBEFCB 0%,#E3C27E 38%,#B08A45 62%,#F3E0B0 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 2px 0 rgba(110,80,32,.85)) drop-shadow(0 12px 22px rgba(0,0,0,.45))}
+.names .and{font-family:var(--text);font-weight:400;font-size:clamp(24px,6vw,30px);color:var(--gold);margin:4px 0 2px}
+.when{margin:22px 0 0;font-size:clamp(18px,5vw,22px);color:var(--gold-hi)}
+.where{margin:4px 0 0;font-size:clamp(16px,4.3vw,19px);color:rgba(246,241,230,.8)}
+.reveal .rule{width:120px;height:14px;margin-top:18px;color:var(--gold)}
+
+/* ------------------------------------------------------------------ the printed details */
+.details{position:relative;padding:12vh 24px 14vh;display:flex;flex-direction:column;align-items:center;text-align:center}
+.block{width:100%;max-width:440px}
+.block + .block{margin-top:12vh}
+.lede{margin:0;font-size:clamp(18px,4.8vw,21px);color:rgba(243,224,176,.82)}
+
+.date{margin-top:18px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px}
+.date .side{font-size:clamp(18px,4.8vw,22px);color:var(--cream);padding:10px 0;border-block:1px solid rgba(214,176,106,.45)}
+.date .day{font-family:var(--display);font-weight:700;font-size:clamp(110px,32vw,150px);line-height:.9;color:var(--gold-hi);
+  text-shadow:0 1px 0 #E3C27E,0 2px 0 #C49A52,0 3px 0 #9C7330,0 4px 0 #7A5C24,0 18px 30px rgba(0,0,0,.5)}
+
+.count{margin:34px auto 0;display:grid;grid-template-columns:repeat(4,1fr);max-width:400px}
+.count div{padding:6px 0}
+.count div + div{border-inline-start:1px solid rgba(214,176,106,.3)}
+.count b{display:block;font-family:var(--display);font-weight:700;font-size:clamp(30px,8.4vw,40px);line-height:1.2;color:var(--gold-hi);font-variant-numeric:tabular-nums}
+.count span{display:block;font-size:14px;color:rgba(246,241,230,.7)}
+
+.venue{margin:14px 0 0;font-family:var(--display);font-weight:700;font-size:clamp(46px,13vw,64px);line-height:1.15;color:var(--gold-hi)}
+.actions{margin-top:30px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:0 26px;border-radius:999px;font-family:var(--text);font-size:18px;font-weight:700;text-decoration:none;transition:transform .15s ease, box-shadow .2s ease}
+.btn:active{transform:scale(.97)}
+.btn svg{width:18px;height:18px}
+.btn.gold{color:var(--wine-800);background:linear-gradient(110deg,#D6B06A 30%,#F6E6BC 50%,#D6B06A 70%);box-shadow:0 14px 30px -12px rgba(214,176,106,.55),inset 0 1px 0 rgba(255,255,255,.55)}
+.btn.line{color:var(--gold-hi);border:1px solid rgba(214,176,106,.6)}
+@media (hover:hover){ .btn:hover{transform:translateY(-2px)} }
+
+.sign{margin:0;padding:6vh 24px 9vh;text-align:center;font-family:var(--display);font-size:22px;color:rgba(214,176,106,.75)}
+
+@media (prefers-reduced-motion: reduce){
+  .hint svg{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="wall-pattern" aria-hidden="true"></div>
+
+<main>
+  <!-- 1 · The gate opens as you scroll down (and closes again if you scroll back up) -->
+  <section class="gate" data-mode="open" aria-label="الدعوة">
+    <div class="stage">
+      <p class="kicker"><span class="for" id="forLine">دعوة خاصة</span><span class="guest" id="guestName">من خالد وشروق</span></p>
+
+      <div class="spill" aria-hidden="true"></div>
+      <div class="portal" aria-hidden="true">
+        <div class="inside"><div class="light"></div><div class="rays"></div></div>
+        <div class="leaf left">
+          <div class="panel top"></div><div class="panel bottom"></div><div class="studs"></div>
+          <div class="medal"><span>ش</span></div>
+          <div class="ring"><svg viewBox="0 0 34 48"><circle cx="17" cy="6" r="5" fill="#B08A45" stroke="#6E5020"/><circle cx="17" cy="28" r="14" fill="none" stroke="#E3C27E" stroke-width="3.5"/><circle cx="17" cy="28" r="14" fill="none" stroke="#7A5C24" stroke-width="1" stroke-dasharray="2 5"/></svg></div>
+          <div class="shade"></div>
+        </div>
+        <div class="leaf right">
+          <div class="panel top"></div><div class="panel bottom"></div><div class="studs"></div>
+          <div class="medal"><span>خ</span></div>
+          <div class="ring"><svg viewBox="0 0 34 48"><circle cx="17" cy="6" r="5" fill="#B08A45" stroke="#6E5020"/><circle cx="17" cy="28" r="14" fill="none" stroke="#E3C27E" stroke-width="3.5"/><circle cx="17" cy="28" r="14" fill="none" stroke="#7A5C24" stroke-width="1" stroke-dasharray="2 5"/></svg></div>
+          <div class="shade"></div>
+        </div>
+      </div>
+      <div class="vignette" aria-hidden="true"></div>
+
+      <div class="reveal" id="reveal">
+        <p class="verse">﴿ وَمِنْ آيَاتِهِ أَنْ خَلَقَ لَكُم مِّنْ أَنفُسِكُمْ أَزْوَاجًا لِّتَسْكُنُوا إِلَيْهَا وَجَعَلَ بَيْنَكُم مَّوَدَّةً وَرَحْمَةً ﴾</p>
+        <p class="lead">بكل الحب، وبمباركة أهلنا، يسعدنا دعوتكم لحضور حفل زفافنا</p>
+        <h1 class="names"><span class="n">خالد</span><span class="and">و</span><span class="n">شروق</span></h1>
+        <svg class="rule" viewBox="0 0 120 14" aria-hidden="true"><path d="M0 7 H48 M72 7 H120" stroke="currentColor" stroke-width="1"/><path d="M60 1 L66 7 L60 13 L54 7 Z" fill="currentColor"/></svg>
+        <p class="when">الأحد ٦ ديسمبر ٢٠٢٦</p>
+        <p class="where">قلعة جرين بلازا</p>
+      </div>
+
+      <div class="hint" id="hint">
+        <span>مرّر لأسفل لفتح الباب</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · Date & place, set like a printed card -->
+  <section class="details">
+    <div class="block">
+      <p class="lede">نحتفل معكم يوم</p>
+      <div class="date">
+        <div class="side">الأحد</div>
+        <div class="day">٦</div>
+        <div class="side">ديسمبر ٢٠٢٦</div>
+      </div>
+      <div class="count" id="count" aria-live="off">
+        <div><b data-u="d">٠</b><span>يوم</span></div>
+        <div><b data-u="h">٠</b><span>ساعة</span></div>
+        <div><b data-u="m">٠</b><span>دقيقة</span></div>
+        <div><b data-u="s">٠</b><span>ثانية</span></div>
+      </div>
+      <div class="actions">
+        <a class="btn line" id="calBtn" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+          أضف للتقويم
+        </a>
+      </div>
+    </div>
+
+    <div class="block">
+      <p class="lede">في</p>
+      <h2 class="venue">قلعة جرين بلازا</h2>
+      <div class="actions">
+        <a class="btn gold" href="https://maps.app.goo.gl/4c6MHErBZk8yKVCw6?g_st=ic" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
+          افتح الخريطة
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · Farewell: the gate closes as you keep scrolling -->
+  <section class="gate farewell" data-mode="close" aria-label="ختام">
+    <div class="stage">
+      <div class="spill" aria-hidden="true"></div>
+      <div class="portal" aria-hidden="true">
+        <div class="inside"><div class="light"></div><div class="farewell-text">بوجودكم تكتمل فرحتنا<small>في انتظاركم</small></div></div>
+        <div class="leaf left">
+          <div class="panel top"></div><div class="panel bottom"></div><div class="studs"></div>
+          <div class="medal"><span>ش</span></div>
+          <div class="ring"><svg viewBox="0 0 34 48"><circle cx="17" cy="6" r="5" fill="#B08A45" stroke="#6E5020"/><circle cx="17" cy="28" r="14" fill="none" stroke="#E3C27E" stroke-width="3.5"/><circle cx="17" cy="28" r="14" fill="none" stroke="#7A5C24" stroke-width="1" stroke-dasharray="2 5"/></svg></div>
+          <div class="shade"></div>
+        </div>
+        <div class="leaf right">
+          <div class="panel top"></div><div class="panel bottom"></div><div class="studs"></div>
+          <div class="medal"><span>خ</span></div>
+          <div class="ring"><svg viewBox="0 0 34 48"><circle cx="17" cy="6" r="5" fill="#B08A45" stroke="#6E5020"/><circle cx="17" cy="28" r="14" fill="none" stroke="#E3C27E" stroke-width="3.5"/><circle cx="17" cy="28" r="14" fill="none" stroke="#7A5C24" stroke-width="1" stroke-dasharray="2 5"/></svg></div>
+          <div class="shade"></div>
+        </div>
+      </div>
+      <div class="vignette" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <p class="sign">خالد وشروق</p>
+</main>
+
+<script>
+(() => {
+  const AR = "٠١٢٣٤٥٦٧٨٩";
+  const ar = n => String(n).replace(/\d/g, d => AR[d]);
+  const clamp = v => Math.min(1, Math.max(0, v));
+  const seg = (p, a, b) => clamp((p - a) / (b - a));
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // personal line: ?to=<guest name>
+  const to = new URLSearchParams(location.search).get("to");
+  if (to) {
+    document.getElementById("forLine").textContent = "دعوة خاصة لـ";
+    document.getElementById("guestName").textContent = to.slice(0, 40);
+  }
+
+  const gates = [...document.querySelectorAll(".gate")].map(g => ({
+    el: g, mode: g.dataset.mode,
+    portal: g.querySelector(".portal"), stage: g.querySelector(".stage"),
+    kicker: g.querySelector(".kicker"), hint: g.querySelector(".hint"), reveal: g.querySelector(".reveal")
+  }));
+
+  function frame() {
+    const vh = window.innerHeight;
+    for (const g of gates) {
+      const r = g.el.getBoundingClientRect();
+      const run = g.el.offsetHeight - vh;
+      const p = clamp(-r.top / run);
+      let open, glow, zoom = 0, fade = 0, card = 0;
+      if (g.mode === "open") {
+        open = ease(seg(p, .04, .5));                // the leaves swing
+        glow = seg(p, .02, .42);                     // light grows behind them
+        zoom = reduce ? 0 : ease(seg(p, .38, .8));   // we walk through the doorway
+        fade = seg(p, .66, .84);
+        card = ease(seg(p, .62, .88));               // the invitation settles in
+        if (g.kicker) g.kicker.style.opacity = 1 - seg(p, .02, .18);
+        if (g.hint) g.hint.style.opacity = 1 - seg(p, 0, .05);
+        if (g.reveal) g.reveal.classList.toggle("on", card > .5);
+      } else {
+        const closed = ease(seg(p, .18, .72));       // the leaves swing shut
+        open = 1 - closed;
+        glow = 1 - seg(p, .3, .75);
+      }
+      g.stage.style.setProperty("--open", open.toFixed(4));
+      g.stage.style.setProperty("--glow", glow.toFixed(4));
+      g.stage.style.setProperty("--card", card.toFixed(4));
+      g.portal.style.transform = `scale(${(1 + zoom * 2.6).toFixed(4)})`;
+      g.portal.style.opacity = (1 - fade).toFixed(4);
+      const spill = g.stage.querySelector(".spill");
+      if (spill) spill.style.opacity = (glow * (1 - fade)).toFixed(4);
+    }
+  }
+  let queued = false;
+  const onScroll = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; frame(); }); } };
+  addEventListener("scroll", onScroll, { passive: true });
+  addEventListener("resize", onScroll);
+  frame();
+
+  // countdown to Sunday 6 December 2026 (Cairo); no time was given, so it counts to the start of the day
+  const target = new Date("2026-12-06T00:00:00+02:00").getTime();
+  const els = Object.fromEntries([...document.querySelectorAll("#count b")].map(b => [b.dataset.u, b]));
+  const tick = () => {
+    let s = Math.max(0, Math.floor((target - Date.now()) / 1000));
+    const d = Math.floor(s / 86400); s %= 86400;
+    const h = Math.floor(s / 3600); s %= 3600;
+    const m = Math.floor(s / 60); s %= 60;
+    els.d.textContent = ar(d); els.h.textContent = ar(h); els.m.textContent = ar(m); els.s.textContent = ar(s);
+  };
+  tick(); setInterval(tick, 1000);
+
+  // add to calendar (all-day event)
+  const q = new URLSearchParams({
+    action: "TEMPLATE",
+    text: "فرح خالد وشروق",
+    dates: "20261206/20261207",
+    location: "قلعة جرين بلازا",
+    details: "https://maps.app.goo.gl/4c6MHErBZk8yKVCw6?g_st=ic",
+    ctz: "Africa/Cairo"
+  });
+  document.getElementById("calBtn").href = "https://calendar.google.com/calendar/render?" + q;
+})();
+</script>
+</body>
+</html>

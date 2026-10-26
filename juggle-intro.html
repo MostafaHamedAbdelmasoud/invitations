@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mahmoud &amp; Maryam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Sans:wght@400;500&family=Tajawal:wght@400;500;700&display=swap">
+
+<style>
+/* =====================================================================
+   JUGGLE GAME — copy this whole block into the site.
+   The game is a strip in the empty space at the bottom of the arch,
+   UNDER the invitation text. It never covers the text.
+   ===================================================================== */
+.jg {
+  --jg-gold: #D6B06A;
+  --jg-gold-light: #F0DCAE;
+  --jg-gold-deep: #8F6A33;
+  --jg-muted: #C9D2E0;
+  --jg-ink: #13234D;
+  --jg-font: inherit;
+  --jg-font-num: "Cormorant Garamond", Georgia, serif;
+  --jg-font-display: "Amiri", serif;
+
+  position: absolute;
+  left: 9%;            /* inside the dotted inner arch line */
+  right: 9%;
+  bottom: 14px;
+  /* top is set by the script: just under the invitation text */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--jg-muted);
+  font-family: var(--jg-font);
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.jg.is-shown { opacity: 1; }
+
+/* play area: only the ball lives here */
+.jg-play { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.jg-floor {
+  position: absolute; left: 6%; right: 6%; bottom: 3px; height: 1px;
+  background: linear-gradient(90deg, rgba(214,176,106,0), rgba(214,176,106,0.55), rgba(214,176,106,0));
+  pointer-events: none;
+}
+.jg-shadow {
+  position: absolute; left: 0; bottom: 0; height: 6px; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35); will-change: transform; pointer-events: none;
+}
+.jg-ball { position: absolute; left: 0; top: 0; will-change: transform; pointer-events: none; }
+/* "tap me" ring around the resting ball, so guests notice it */
+.jg-ball::after {
+  content: ""; position: absolute; inset: -6px; border-radius: 50%;
+  border: 1.5px solid var(--jg-gold-light); opacity: 0;
+}
+.jg.is-idle .jg-ball::after { animation: jg-ping 1.6s ease-out infinite; }
+@keyframes jg-ping { 0% { transform: scale(0.85); opacity: 0.9; } 100% { transform: scale(1.7); opacity: 0; } }
+.jg-ball-inner {
+  width: 100%; height: 100%; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #F6E4B8 0%, #D9B46E 45%, #A87D3E 100%);
+  box-shadow: 0 3px 0 var(--jg-gold-deep), 0 0 18px rgba(240, 220, 174, 0.45);
+  display: flex; align-items: center; justify-content: center;
+}
+.jg-ball-inner svg { width: 56%; height: auto; }
+.jg.is-idle .jg-ball-inner { animation: jg-bob 2.4s ease-in-out infinite; }
+@keyframes jg-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -4px; } }
+
+.jg-stage {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; padding: 0; border: 0; background: transparent;
+  cursor: pointer; touch-action: none; border-radius: 12px;
+}
+.jg-stage:focus-visible { outline: 1.5px solid var(--jg-gold-light); outline-offset: 2px; }
+
+.jg-win {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap;
+  animation: jg-pop 0.4s ease-out;
+}
+.jg-win[hidden] { display: none; }
+.jg-win-title { text-align: center; line-height: 1.2; font-family: var(--jg-font-display); font-size: clamp(20px, 5.5vw, 26px); color: var(--jg-gold); }
+.jg-again {
+  min-height: 44px; min-width: 120px; padding: 0 18px;
+  border: 1px solid rgba(214, 176, 106, 0.5); border-radius: 999px;
+  background: transparent; color: var(--jg-gold);
+  font: inherit; font-size: 14px; cursor: pointer;
+}
+.jg-again:focus-visible { outline: 2px solid var(--jg-gold-light); outline-offset: 2px; }
+.jg-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.jg-primary { border-color: transparent; background: linear-gradient(135deg, #D6B06A, #F0DCAE 55%, #C99A52); color: #13234D; font-weight: 600; }
+.jg-sub { font-size: 15px; color: var(--jg-muted); }
+.jg.is-full .jg-win { flex-direction: column; }
+.jg.is-full .jg-win [data-jg="again"] { display: none; }
+@keyframes jg-pop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.jg.is-won .jg-ball, .jg.is-won .jg-shadow { opacity: 0; transition: opacity 0.25s; }
+.jg.is-full .jg-win { flex-direction: column; }
+.jg.is-full .jg-win-title { font-size: clamp(30px, 9vw, 44px); }
+
+/* one quiet line under the play area */
+.jg-bar { flex: none; display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 22px; font-size: 14px; color: var(--jg-gold); }
+.jg-count { font-family: var(--jg-font-num); font-size: 17px; font-weight: 600; color: var(--jg-gold-light); direction: ltr; }
+.jg.is-idle .jg-count { display: none; }
+
+@media (prefers-reduced-motion: reduce) { .jg { display: none; } }
+/* ===================== end of JUGGLE GAME CSS ===================== */
+
+
+/* =====================================================================
+   DEMO ONLY — stand-ins for your page. Do not copy into the site.
+   ===================================================================== */
+html, body { margin: 0; height: 100%; }
+body { background: radial-gradient(ellipse at 50% 30%, #253A6B 0%, #15244D 55%, #0E1838 100%); font-family: "IBM Plex Sans", "Tajawal", sans-serif; overflow: hidden; }
+.demo-page { position: relative; height: 100svh; max-width: 1000px; margin: 0 auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.gt { background: linear-gradient(180deg, #F6E4B8, #D6B06A 60%, #B88E4E); -webkit-background-clip: text; background-clip: text; color: transparent; }
+</style>
+</head>
+<body>
+
+<!-- ======================= DEMO ONLY: your first slide ======================= -->
+<div class="demo-page" style="--tx:0;--ty:0">
+  <div id="invite-arch" aria-hidden="true" style="position:absolute;top:92px;left:30px;right:30px;height:580px;transform:perspective(900px) rotateX(calc(var(--ty) * -8deg)) rotateY(calc(var(--tx) * 10deg));transition:transform .35s ease-out"><svg width="100%" height="580" viewBox="0 0 330 580" preserveAspectRatio="none" style="display:block;overflow:visible"><path d="M4 580 L4 196 C4 100 84 42 165 6 C246 42 326 100 326 196 L326 580" fill="rgba(255,255,255,0.025)" stroke="#D6B06A" stroke-opacity="0.8" stroke-width="1.2" vector-effect="non-scaling-stroke"></path><path d="M15 580 L15 200 C15 110 90 58 165 23 C240 58 315 110 315 200 L315 580" fill="none" stroke="#D6B06A" stroke-opacity="0.35" stroke-width="1" vector-effect="non-scaling-stroke"></path><path d="M30 580 L30 214 C30 128 98 80 165 48 C232 80 300 128 300 214 L300 580" fill="none" stroke="#D6B06A" stroke-opacity="0.15" stroke-width="1" vector-effect="non-scaling-stroke" stroke-dasharray="2 6"></path></svg><svg width="12" height="12" viewBox="159 0 12 12" style="position:absolute;top:0;left:calc(50% - 6px)"><path d="M165 0 L171 6 L165 12 L159 6 Z" fill="#D6B06A"></path></svg></div>
+
+  <div id="invite-content" style="position:absolute;top:158px;left:40px;right:40px;display:flex;flex-direction:column;align-items:center;text-align:center"><svg aria-hidden="true" class="rv" width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="#D6B06A" stroke-width="1.2"><rect x="8" y="8" width="14" height="14"></rect><rect x="8" y="8" width="14" height="14" transform="rotate(45 15 15)"></rect><circle cx="15" cy="15" r="2.5" fill="#D6B06A"></circle></svg><div class="rv t1" style="margin-top:12px;font-size:15px;color:#D6B06A">Wedding Invitation</div><h1 class="sr-only">Mahmoud &amp; Maryam</h1><div aria-hidden="true" style="display:contents"><div class="rv t2" style="margin-top:8px"><div class="gt" style="font-family:'Amiri', serif;font-size:66px;line-height:1.12;font-weight:700">Mahmoud</div></div><div class="rv t3" style="font-family:'Cormorant Garamond', Georgia, serif;font-style:italic;font-size:46px;line-height:1;color:#D6B06A">&amp;</div><div class="rv t3"><div class="gt" style="font-family:'Amiri', serif;font-size:66px;line-height:1.18;font-weight:700">Maryam</div></div></div><div class="rv t4" aria-hidden="true" style="margin-top:16px;display:flex;align-items:center;gap:10px"><div style="width:56px;height:1px;background:linear-gradient(90deg, rgba(214,176,106,0), #D6B06A)"></div><div style="width:7px;height:7px;background:#D6B06A;transform:rotate(45deg)"></div><div style="width:56px;height:1px;background:linear-gradient(270deg, rgba(214,176,106,0), #D6B06A)"></div></div><div class="rv t4" style="margin-top:16px;font-size:17px;font-weight:500;color:#EEE7D8">Saturday · December 5, 2026</div><p class="rv t5" style="margin:22px 0 0;font-size:15px;line-height:1.95;color:#C9D2E0;max-width:max(290px, calc(100% - 20px))">With love, and with the blessing of our families, we joyfully invite you to celebrate our wedding and the beginning of our life together</p></div>
+</div>
+
+<!-- DEMO ONLY: stands in for page 2 of the invitation -->
+<div id="demo-next" hidden style="position:fixed;inset:0;display:grid;place-items:center;background:#15244D;color:#EEE7D8;font-size:18px;text-align:center">
+  <div>Page 2 of the invitation<br><button type="button" onclick="document.getElementById('demo-next').hidden=true" style="margin-top:16px;min-height:44px;padding:0 20px;border-radius:999px;border:1px solid #D6B06A;background:transparent;color:#D6B06A;font:inherit">Back to page 1</button></div>
+</div>
+<style>#demo-next[hidden]{display:none!important}</style>
+
+<script>
+/* =====================================================================
+   JUGGLE GAME — copy this whole script into the site.
+   Usage (after the envelope opens, on the first slide):
+     var game = JuggleGame.mount(archEl, {
+       below: contentEl,   // the invitation text; the game sits under it
+       lang: "en" | "ar",
+       delayMs: 900,       // fade in after the text's reveal animation
+       minHeight: 140,     // smallest play strip, in px
+       growArch: true,     // if the strip doesn't fit, make the arch taller by the difference
+       fullTop: 70,        // while playing, the game uses the arch from this point down
+       winHoldMs: 1800,    // how long the win message shows before the text returns
+       onWin: function (r) {},
+       onContinue: function () {}   // REQUIRED for "Continue": go to the next page/slide
+     });
+     game.setLang("ar"); game.destroy();
+   archEl and contentEl must be siblings inside the same positioned parent
+   (as on the site today).
+   ===================================================================== */
+(function () {
+  "use strict";
+
+  var TEXT = {
+    en: { idle: "Tap the rings to bounce them", playing: "Tap anywhere near the rings", lost: "",
+          overTitle: "So close!", overSub: "{n} of {goal} bounces", retry: "Try again", cont: "Continue",
+          again: "Play again", stage: "Bounce the rings" },
+    ar: { idle: "اضغط على الدبل عشان تنطّ", playing: "اضغط قريب من الدبل", lost: "",
+          overTitle: "قربت!", overSub: "{n} من {goal} نطّات", retry: "جرب تاني", cont: "كمّل الدعوة",
+          again: "العب تاني", stage: "نطّط الدبل" }
+  };
+
+  var RINGS_SVG = '<svg viewBox="0 0 44 40" fill="none" stroke="#13234D" stroke-width="3.4" aria-hidden="true">' +
+    '<circle cx="16" cy="26" r="10"/><circle cx="28" cy="26" r="10"/><path d="M22 3 l4 4 -4 4 -4 -4 z" stroke-width="2.6"/></svg>';
+
+  function mount(host, opts) {
+    opts = opts || {};
+    var GOAL = opts.goal || 7;
+    var MIN_H = opts.minHeight || 140;
+    var GAP = 18;          // space between the text and the game
+    var BOTTOM = 14;       // matches .jg { bottom }
+    var lang = opts.lang === "ar" ? "ar" : "en";
+    var below = opts.below;
+
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return { setLang: function () {}, destroy: function () {} };
+    }
+
+    /* The arch div is aria-hidden as a whole. Keep its drawings hidden but let the game be reachable. */
+    var hostAria = host.getAttribute("aria-hidden");
+    var hiddenKids = [];
+    if (hostAria !== null) {
+      Array.prototype.forEach.call(host.children, function (el) {
+        if (!el.hasAttribute("aria-hidden")) { el.setAttribute("aria-hidden", "true"); hiddenKids.push(el); }
+      });
+      host.removeAttribute("aria-hidden");
+    }
+
+    var origHeight = host.style.height;
+    var archSvg = host.querySelector("svg[height]");
+    var origSvgHeight = archSvg ? archSvg.getAttribute("height") : null;
+    var origTransform = host.style.transform;
+
+    var root = document.createElement("div");
+    root.className = "jg is-idle";
+    root.innerHTML =
+      '<div class="jg-play" data-jg="play">' +
+        '<div class="jg-floor"></div><div class="jg-shadow" data-jg="shadow"></div>' +
+        '<div class="jg-ball" data-jg="ball"><div class="jg-ball-inner">' + RINGS_SVG + '</div></div>' +
+        '<button class="jg-stage" type="button" data-jg="stage"></button>' +
+        '<div class="jg-win" data-jg="win" hidden>' +
+          '<div class="jg-actions"><button class="jg-again" type="button" data-jg="again" data-jg-text="again"></button>' +
+          '<button class="jg-again jg-primary" type="button" data-jg="winCont" data-jg-text="cont"></button></div></div>' +
+        '<div class="jg-win" data-jg="over" hidden><div class="jg-win-title" data-jg-text="overTitle"></div>' +
+          '<div class="jg-sub" data-jg="overSub"></div>' +
+          '<div class="jg-actions"><button class="jg-again jg-primary" type="button" data-jg="retry" data-jg-text="retry"></button>' +
+          '<button class="jg-again" type="button" data-jg="cont" data-jg-text="cont"></button></div></div>' +
+      '</div>' +
+      '<div class="jg-bar" aria-live="polite"><span class="jg-count" data-jg="count"></span><span data-jg="hint"></span></div>';
+    host.appendChild(root);
+
+    var q = function (k) { return root.querySelector('[data-jg="' + k + '"]'); };
+    var play = q("play"), ball = q("ball"), shadow = q("shadow"), stage = q("stage");
+    var hint = q("hint"), count = q("count"), win = q("win"), again = q("again");
+    var over = q("over"), overSub = q("overSub"), retryBtn = q("retry"), contBtn = q("cont"), winCont = q("winCont");
+
+    var W = 0, H = 0, R = 20, FLOOR = 0, CEIL = 0, G = 0.4, KICK = -8, MAXVX = 3;
+    var s = { x: 0, y: 0, vx: 0, vy: 0, rot: -14, n: 0, mode: "idle" };
+    var raf = 0, destroyed = false, winTimer = 0;
+
+    /* ---------- place the strip under the text (transform-independent) ---------- */
+    /* Two layouts:
+       strip — under the invitation text (resting, after a drop, after a win)
+       full  — the whole arch, while the ball is in play and the text is hidden */
+    var full = false, curTop = 0;
+    var FULL_TOP = opts.fullTop || 70;   // clears the pointed top of the arch
+
+    function stripTop() {
+      return below ? (below.offsetTop + below.offsetHeight - host.offsetTop + GAP) : host.offsetHeight * 0.6;
+    }
+    function place() {
+      var oldTop = curTop;
+      var top = stripTop();
+      var archH = parseFloat(origHeight) || host.offsetHeight;
+      if (archH - top - BOTTOM < MIN_H && opts.growArch !== false) {
+        var hh = Math.ceil(top + MIN_H + BOTTOM);
+        host.style.height = hh + "px";
+        if (archSvg) archSvg.setAttribute("height", hh);
+      } else {
+        host.style.height = origHeight;
+        if (archSvg && origSvgHeight !== null) archSvg.setAttribute("height", origSvgHeight);
+      }
+      curTop = full ? Math.min(FULL_TOP, top) : top;
+      root.style.top = curTop + "px";
+      root.classList.toggle("is-full", full);
+      // the play area's floor never moves, so shift the ball to stay where it is on screen
+      if (oldTop) s.y += oldTop - curTop;
+      measure();
+    }
+    function setFull(on) { if (full === on) return; full = on; place(); }
+
+    /* fade the invitation text out / back in */
+    var origOpacity = below ? below.style.opacity : "";
+    var origTransition = below ? below.style.transition : "";
+    function showText(on) {
+      if (!below) return;
+      below.style.transition = (origTransition ? origTransition + ", " : "") + "opacity 0.45s ease";
+      below.style.opacity = on ? origOpacity : "0";
+      below.style.pointerEvents = on ? "" : "none";
+      if (on) below.removeAttribute("inert"); else below.setAttribute("inert", "");
+    }
+
+    function measure() {
+      W = play.clientWidth; H = play.clientHeight;
+      if (!W || !H) return;
+      R = Math.round(Math.max(18, Math.min(30, H * 0.24)));
+      FLOOR = H - R - 4;
+      CEIL = R + 2;
+      // jump peak ≈ 80% of the strip, at any size
+      // slow, floaty fall so it's easy to keep up
+      G = 0.24 * (H / 200);
+      KICK = -Math.sqrt(2 * G * (FLOOR - CEIL) * 0.7);
+      MAXVX = Math.max(1.5, W * 0.01);
+      ball.style.width = ball.style.height = (R * 2) + "px";
+      shadow.style.width = (R * 2.2) + "px";
+      if (s.mode === "idle" || !s.x) rest();
+      else { s.x = Math.max(R, Math.min(W - R, s.x)); s.y = Math.min(s.y, FLOOR); }
+      draw();
+    }
+    function rest() { s.x = W / 2; s.y = FLOOR; s.vx = 0; s.vy = 0; s.rot = -14; }
+
+    function draw() {
+      ball.style.transform = "translate3d(" + (s.x - R) + "px," + (s.y - R) + "px,0) rotate(" + s.rot + "deg)";
+      var k = 0.4 + 0.6 * (s.y / FLOOR);
+      shadow.style.transform = "translateX(" + (s.x - R * 1.1) + "px) scaleX(" + k + ")";
+      count.textContent = s.n + " / " + GOAL;
+    }
+
+    /* hold the arch's 3D tilt still only while the ball is moving */
+    function setTiltFrozen(on) { if (opts.freezeTilt !== false) host.style.transform = on ? "none" : origTransform; }
+
+    function setMode(m) {
+      s.mode = m;
+      root.classList.remove("is-idle", "is-playing", "is-lost", "is-won");
+      root.classList.add("is-" + m);
+      var t = TEXT[lang];
+      hint.textContent = m === "won" ? "" : m === "lost" ? t.lost : m === "playing" ? t.playing : t.idle;
+      setTiltFrozen(m === "playing");
+    }
+    function applyLang() {
+      var t = TEXT[lang];
+      root.querySelectorAll("[data-jg-text]").forEach(function (el) { el.textContent = t[el.getAttribute("data-jg-text")]; });
+      root.setAttribute("dir", lang === "ar" ? "rtl" : "ltr");
+      stage.setAttribute("aria-label", t.stage);
+      setMode(s.mode);
+    }
+
+    /* ---------- loop: only while the ball is in the air ---------- */
+    function tick() {
+      raf = 0;
+      if (s.mode !== "playing") return;
+      s.vy += G;
+      s.vx += (W / 2 - s.x) * 0.0008;   // gentle pull back toward the middle
+      s.vx *= 0.995;
+      s.x += s.vx; s.y += s.vy; s.rot += s.vx * 3;
+      if (s.x < R) { s.x = R; s.vx = -s.vx * 0.8; }
+      if (s.x > W - R) { s.x = W - R; s.vx = -s.vx * 0.8; }
+      if (s.y < CEIL) { s.y = CEIL; s.vy = Math.abs(s.vy) * 0.3; }
+      if (s.y >= FLOOR) { s.y = FLOOR; s.vx = 0; s.vy = 0; draw(); setMode("lost"); showOver(); return; }
+      draw();
+      raf = requestAnimationFrame(tick);
+    }
+    function startLoop() { if (!raf) raf = requestAnimationFrame(tick); }
+    function stopLoop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
+
+    function kick(px, py) {
+      if (destroyed || s.mode === "won") return;
+      if (s.mode === "lost") return;   // use the Try again / Continue buttons
+      // big, forgiving tap zone: anywhere within ~4 ball-widths, or anywhere below the ball
+      if (s.mode === "playing" && Math.hypot(px - s.x, py - s.y) > R * 4 && py < s.y) return;
+      s.vx = Math.max(-MAXVX, Math.min(MAXVX, (s.x - px) * 0.06 + (Math.random() - 0.5) * MAXVX * 0.3));
+      s.vy = KICK;
+      s.n += 1;
+      if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) {} }
+      if (s.n >= GOAL) {
+        stopLoop(); draw(); setMode("won"); win.hidden = false; winCont.hidden = false;
+        winTimer = setTimeout(winDone, opts.winHoldMs == null ? 2500 : opts.winHoldMs);
+        if (typeof opts.onWin === "function") opts.onWin({ bounces: s.n });
+        document.dispatchEvent(new CustomEvent("juggle:win"));
+        return;
+      }
+      if (s.mode !== "playing") { setMode("playing"); showText(false); setFull(true); s.vy = KICK; }
+      draw(); startLoop();
+    }
+
+    function onDown(e) {
+      e.preventDefault();
+      // offsetX/Y are in the stage's own coordinates, so taps stay accurate on a tilted arch
+      if (e.target === stage && typeof e.offsetX === "number") { kick(e.offsetX, e.offsetY); return; }
+      var r = play.getBoundingClientRect();
+      kick((e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height);
+    }
+    function onKey(e) { if (e.detail === 0) kick(s.x, s.y + R * 0.5); }
+    function onVis() { if (document.hidden) stopLoop(); else if (s.mode === "playing") startLoop(); }
+    function onAgain() { win.hidden = true; over.hidden = true; s.n = 0; rest(); draw(); setMode("idle"); stage.focus({ preventScroll: true }); }
+
+    /* after a drop: stay in the game, offer Try again or Continue */
+    function showOver() {
+      overSub.textContent = TEXT[lang].overSub.replace("{n}", s.n).replace("{goal}", GOAL);
+      over.hidden = false;
+      retryBtn.focus({ preventScroll: true });
+    }
+    function onRetry() { onAgain(); }                       // text stays hidden, ball ready in the arch
+    /* Continue = go to the next page of the invitation.
+       The first page is put back to normal first, so it looks right if the guest scrolls back. */
+    function goNext() {
+      if (typeof opts.onContinue === "function") opts.onContinue();
+      document.dispatchEvent(new CustomEvent("juggle:continue"));
+    }
+    function onContinue() { onAgain(); showText(true); setFull(false); goNext(); }
+    function winDone() { clearTimeout(winTimer); winCont.hidden = true; showText(true); setFull(false); }
+
+    stage.addEventListener("pointerdown", onDown);
+    stage.addEventListener("click", onKey);
+    again.addEventListener("click", onAgain);
+    retryBtn.addEventListener("click", onRetry);
+    contBtn.addEventListener("click", onContinue);
+    winCont.addEventListener("click", function () { winDone(); goNext(); });
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("resize", place);
+    var ro = (window.ResizeObserver && below) ? new ResizeObserver(place) : null;
+    if (ro) ro.observe(below);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (!destroyed) place(); });
+
+    applyLang();
+    place();
+    var showTimer = setTimeout(function () { root.classList.add("is-shown"); }, opts.delayMs == null ? 900 : opts.delayMs);
+
+    return {
+      setLang: function (l) { lang = l === "ar" ? "ar" : "en"; applyLang(); place(); },
+      destroy: function () {
+        destroyed = true; stopLoop(); clearTimeout(showTimer); clearTimeout(winTimer);
+        showText(true); if (below) below.style.transition = origTransition;
+        if (ro) ro.disconnect();
+        document.removeEventListener("visibilitychange", onVis);
+        window.removeEventListener("resize", place);
+        root.remove();
+        host.style.height = origHeight; host.style.transform = origTransform;
+        if (archSvg && origSvgHeight !== null) archSvg.setAttribute("height", origSvgHeight);
+        hiddenKids.forEach(function (el) { el.removeAttribute("aria-hidden"); });
+        if (hostAria !== null) host.setAttribute("aria-hidden", hostAria);
+      }
+    };
+  }
+
+  window.JuggleGame = { mount: mount };
+})();
+/* ===================== end of JUGGLE GAME script ===================== */
+
+
+/* ======================= DEMO wiring only ======================= */
+JuggleGame.mount(document.getElementById("invite-arch"), {
+  below: document.getElementById("invite-content"),
+  lang: "en",
+  onContinue: function () { document.getElementById("demo-next").hidden = false; }   // your site: go to the next slide
+});
+</script>
+</body>
+</html>

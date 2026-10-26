@@ -1,0 +1,2 @@
+- Keep confirmed wedding data and calendar links in a shared browser-safe module so the invitation, countdown, and date tests stay consistent.
+- Keep invitation language in a shared React context, defaulting to Arabic; render only the selected translation and mark its language and direction so all invitation sections switch together.

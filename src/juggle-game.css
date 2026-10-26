@@ -1,0 +1,183 @@
+/* =====================================================================
+   JUGGLE GAME — styles for src/lib/juggle-game.js.
+   The game is a strip in the empty space at the bottom of the arch,
+   UNDER the invitation text. It never covers the text.
+   ===================================================================== */
+.jg {
+  --jg-gold: #D6B06A;
+  --jg-gold-light: #F0DCAE;
+  --jg-gold-deep: #8F6A33;
+  --jg-muted: #E0C9CF;
+  --jg-ink: #4D1321;
+  --jg-font: inherit;
+  --jg-font-num: "Cormorant Garamond", Georgia, serif;
+  --jg-font-display: "Amiri", serif;
+
+  position: absolute;
+  left: 9%;            /* inside the dotted inner arch line */
+  right: 9%;
+  bottom: 14px;
+  /* top is set by the script: just under the invitation text */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--jg-muted);
+  font-family: var(--jg-font);
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.jg.is-shown { opacity: 1; }
+
+/* play area: only the ball lives here */
+.jg-play { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+/* soft spotlight behind the resting ball */
+.jg-play::before {
+  content: ""; position: absolute; left: 50%; bottom: -70px; width: 220px; height: 220px; margin-left: -110px;
+  background: radial-gradient(closest-side, rgba(240, 220, 174, 0.22), rgba(240, 220, 174, 0));
+  pointer-events: none; opacity: 0; transition: opacity 0.4s;
+}
+.jg.is-idle .jg-play::before { opacity: 1; animation: jg-glow 1.8s ease-in-out infinite; }
+@keyframes jg-glow { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+.jg-floor {
+  position: absolute; left: 6%; right: 6%; bottom: 3px; height: 1px;
+  background: linear-gradient(90deg, rgba(214,176,106,0), rgba(214,176,106,0.55), rgba(214,176,106,0));
+  pointer-events: none;
+}
+.jg-shadow {
+  position: absolute; left: 0; bottom: 0; height: 6px; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35); will-change: transform; pointer-events: none;
+}
+.jg-ball { position: absolute; left: 0; top: 0; will-change: transform; pointer-events: none; }
+/* two staggered "tap me" rings around the resting ball, so guests notice it */
+.jg-ball::before, .jg-ball::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid var(--jg-gold-light); opacity: 0;
+}
+.jg.is-idle .jg-ball::before, .jg.is-idle .jg-ball::after { animation: jg-ping 1.8s ease-out infinite; }
+.jg.is-idle .jg-ball::after { animation-delay: 0.9s; }
+@keyframes jg-ping { 0% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+.jg-ball-inner {
+  width: 100%; height: 100%; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #FFF3D2 0%, #E6C27A 45%, #B0843F 100%);
+  box-shadow: 0 3px 0 var(--jg-gold-deep), 0 0 0 2px rgba(255, 243, 210, 0.55), 0 0 28px 6px rgba(240, 220, 174, 0.6);
+  display: flex; align-items: center; justify-content: center;
+}
+.jg-ball-inner svg { width: 60%; height: auto; }
+/* arrows around the resting ball, each turned by --a and pointing in at it */
+/* rotate: undoes the resting ball's -14deg tilt (rest() in juggle-game.js) so the arrows sit straight */
+.jg-arrows { position: absolute; inset: 0; rotate: 14deg; opacity: 0; transition: opacity 0.3s; }
+.jg.is-idle .jg-arrows { opacity: 1; }
+/* "Play" above the top arrow */
+.jg-cta {
+  position: absolute; left: -100px; right: -100px; bottom: calc(100% + 42px); text-align: center; white-space: nowrap;
+  font-family: var(--jg-font-display); font-size: 28px; font-weight: 700; line-height: 1.3;
+}
+.jg.is-idle .jg-cta { animation: jg-point 1.6s ease-in-out infinite; }
+.jg-arrow { position: absolute; inset: 0; transform: rotate(var(--a)); }
+.jg-arrow svg {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); width: 18px; margin-left: -9px; height: auto;
+  color: var(--jg-gold-light); filter: drop-shadow(0 0 4px rgba(240, 220, 174, 0.7));
+}
+.jg.is-idle .jg-arrow svg { animation: jg-point 1.6s ease-in-out infinite; }
+@keyframes jg-point { 0%, 100% { translate: 0 -4px; } 50% { translate: 0 3px; } }
+.jg.is-idle .jg-ball-inner { animation: jg-bob 1.6s ease-in-out infinite; }
+/* a quick squash when a touch lands on the ball */
+.jg-ball-inner.is-hit { animation: jg-hit 0.22s ease-out; }
+@keyframes jg-hit { 0% { scale: 1; } 35% { scale: 0.86 1.08; } 100% { scale: 1; } }
+@keyframes jg-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -8px; } }
+
+.jg-stage {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; padding: 0; border: 0; background: transparent;
+  cursor: pointer; touch-action: none; border-radius: 12px;
+}
+.jg-stage:focus-visible { outline: 1.5px solid var(--jg-gold-light); outline-offset: 2px; }
+
+.jg-win {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap;
+  animation: jg-pop 0.4s ease-out;
+}
+.jg-win[hidden] { display: none; }
+.jg-win-title { text-align: center; line-height: 1.3; font-family: var(--jg-font-display); font-weight: 700; font-size: clamp(20px, 5.5vw, 26px); }
+/* the site's heading look (its .gt gold gradient and .num3d shadow), for the game's titles, "Play", the count and "+1" */
+.jg-win-title, .jg-cta, .jg-num b, .jg-plus span {
+  background: linear-gradient(180deg, #F6E6BC 0%, #D6B06A 30%, #F8EBC8 50%, #C9A05A 70%, #F3E0B0 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 1px 0 #8E6A2E) drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)) drop-shadow(0 8px 12px rgba(0, 0, 0, 0.35));
+}
+.jg-again {
+  min-height: 44px; min-width: 120px; padding: 0 18px;
+  border: 1px solid rgba(214, 176, 106, 0.5); border-radius: 999px;
+  background: transparent; color: var(--jg-gold);
+  font: inherit; font-size: 14px; cursor: pointer;
+}
+.jg-again:focus-visible { outline: 2px solid var(--jg-gold-light); outline-offset: 2px; }
+.jg-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.jg-primary { border-color: transparent; background: linear-gradient(135deg, #D6B06A, #F0DCAE 55%, #C99A52); color: #4D1321; font-weight: 600; }
+.jg-sub { font-size: 15px; line-height: 1.6; text-align: center; max-width: 260px; color: var(--jg-muted); }
+.jg.is-full .jg-win { flex-direction: column; }
+@keyframes jg-pop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.jg.is-won .jg-ball, .jg.is-won .jg-shadow { opacity: 0; transition: opacity 0.25s; }
+.jg.is-full .jg-win { flex-direction: column; }
+.jg.is-full .jg-win-title { font-size: clamp(30px, 9vw, 44px); }
+/* English titles in the site's English display face (Cormorant Garamond); Amiri stays for Arabic */
+.jg[dir="ltr"] .jg-win-title, .jg[dir="ltr"] .jg-cta { font-family: var(--jg-font-num); font-weight: 600; }
+.jg.is-full[dir="ltr"] .jg-win-title { font-size: clamp(34px, 10vw, 48px); }
+.jg[dir="ltr"] .jg-cta { font-size: 30px; letter-spacing: 0.02em; }
+
+/* bounce counter under the floor line, while the game fills the arch */
+.jg-hud { flex: none; display: none; align-items: center; justify-content: center; gap: 16px; padding-top: 4px; pointer-events: none; direction: ltr; }
+.jg.is-full .jg-hud { display: flex; }
+/* the count uses the site's text font with even, lining figures, so "3 / 7" reads cleanly */
+.jg-num { display: flex; align-items: baseline; gap: 6px; font-family: var(--jg-font); font-weight: 600; line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
+.jg-num b {
+  font-size: 42px; font-weight: 600;
+}
+.jg-num span { font-size: 20px; font-weight: 500; color: var(--jg-gold); text-shadow: 0 1px 0 #8E6A2E, 0 2px 0 #6E5020, 0 4px 8px rgba(0, 0, 0, 0.5); }
+.jg-hud.is-pop .jg-num b { display: inline-block; animation: jg-numpop 0.35s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes jg-numpop { 0% { scale: 1; } 40% { scale: 1.35; } 100% { scale: 1; } }
+.jg-dots { display: flex; gap: 8px; }
+.jg-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(214, 176, 106, 0.55); transition: background 0.2s, box-shadow 0.2s;
+}
+.jg-dot.is-on { background: var(--jg-gold-light); box-shadow: 0 0 8px rgba(240, 220, 174, 0.8); }
+.jg-dot.is-new { animation: jg-dotpop 0.4s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes jg-dotpop { 0% { scale: 0.4; } 60% { scale: 1.6; } 100% { scale: 1; } }
+
+/* "+1" that floats up from the ball on every good touch */
+.jg-plus { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.jg-plus span {
+  position: absolute; left: -20px; width: 40px; bottom: 6px; text-align: center; opacity: 0; direction: ltr;
+  font-family: var(--jg-font); font-size: 24px; font-weight: 600;
+}
+.jg-plus.is-go span { animation: jg-plus 0.7s ease-out; }
+@keyframes jg-plus { 0% { opacity: 0; translate: 0 6px; scale: 0.7; } 20% { opacity: 1; scale: 1.15; } 100% { opacity: 0; translate: 0 -44px; scale: 1; } }
+
+/* fireworks on a win: each spark flies out along its angle --a by --d, then fades */
+.jg-fw { position: absolute; inset: 0; pointer-events: none; }
+.jg-burst { position: absolute; width: 0; height: 0; }
+.jg-burst::before {
+  content: ""; position: absolute; left: -28px; top: -28px; width: 56px; height: 56px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 246, 220, 0.9), rgba(240, 220, 174, 0) 70%);
+  opacity: 0; animation: jg-flash 0.6s ease-out var(--t) both;
+}
+.jg-burst i {
+  position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--c); box-shadow: 0 0 8px 1px var(--c); opacity: 0;
+  animation: jg-spark 1.3s cubic-bezier(.15, .7, .3, 1) var(--t) both;
+}
+@keyframes jg-spark {
+  0% { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--d) * -1)) scale(0.4); }
+}
+@keyframes jg-flash { 0% { opacity: 0; scale: 0.3; } 30% { opacity: 1; } 100% { opacity: 0; scale: 1.6; } }
+
+/* spoken bounce count for screen readers */
+.jg-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) { .jg { display: none; } }
+/* ===================== end of JUGGLE GAME CSS ===================== */
