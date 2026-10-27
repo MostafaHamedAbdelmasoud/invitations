@@ -1,14 +1,17 @@
 <?php
-// Email API for the invitation: emails RSVPs and guestbook wishes through the SMTP server in .env.
+// Email API for wedding invitations: emails RSVPs and guestbook wishes through the SMTP server the site sends, in
+// the email template the site names (templates/<name>/; see templates/README.md). One copy serves any number of sites.
 //
-// The invitation itself is a static site (GitHub Pages); this script runs on the VPS and is called cross-site,
-// so it only answers browsers on the origins listed in ALLOWED_ORIGINS (plus localhost for development).
-// .env lives one folder ABOVE this script's folder (never inside the web root): /opt/wedding/.env on the VPS,
-// the project's .env locally. No dependencies: a small SMTP client (STARTTLS / implicit TLS) is at the bottom.
+// The invitation itself is a static site (GitHub Pages); this script runs on its own server and is called
+// cross-site, so it only answers browsers on the origins listed in ALLOWED_ORIGINS (plus localhost for development).
+// It has its OWN .env, separate from any site's: next to this script (api/.env; .htaccess keeps it from being
+// served), or one folder above it, outside the web root (safest). No dependencies: a small SMTP client
+// (STARTTLS / implicit TLS) is at the bottom.
 //
-// One script, many invitations: each site may send its own mail account (SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_TO)
-// as "credentials", a token encrypted with MAIL_ENCRYPTION_KEY (see scripts/mail-credentials.mjs). The token replaces
-// those four values from .env; SMTP_HOST / SMTP_PORT / SMTP_SECURE always come from .env.
+// One script, many invitations: each site sends its whole mail setup (SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER,
+// SMTP_PASS, SMTP_FROM, SMTP_TO) as "credentials", a token encrypted with MAIL_ENCRYPTION_KEY (see EMAIL.md and
+// scripts/mail-credentials.mjs). So the server's .env only needs MAIL_ENCRYPTION_KEY and ALLOWED_ORIGINS. Any SMTP_*
+// value in .env is used only for a request that sends no token.
 
 declare(strict_types=1);
 
@@ -27,7 +30,8 @@ function respond(int $status, array $body): never
 
 function load_env(): array
 {
-    foreach ([dirname(__DIR__) . '/.env', dirname(__DIR__, 2) . '/.env'] as $path) {
+    // its own .env first (beside the script), then one or two folders up (outside the web root)
+    foreach ([__DIR__ . '/.env', dirname(__DIR__) . '/.env', dirname(__DIR__, 2) . '/.env'] as $path) {
         if (!is_readable($path)) continue;
         $env = [];
         foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
@@ -64,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') respond(405, ['ok' => false, 'error' 
 $input = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($input)) respond(400, ['ok' => false, 'error' => 'invalid']);
 
-// ---- this invitation's mail account (encrypted), if it sent one ------------------------------
+// ---- this invitation's mail setup (encrypted), if it sent one --------------------------------
 
 if (isset($input['credentials']) && $input['credentials'] !== '') {
     $credentials = is_string($input['credentials']) ? decrypt_credentials($input['credentials'], $env['MAIL_ENCRYPTION_KEY'] ?? '') : null;
@@ -77,7 +81,7 @@ if (isset($input['credentials']) && $input['credentials'] !== '') {
 
 foreach (['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM', 'SMTP_TO'] as $key) {
     if (empty($env[$key])) {
-        error_log("send-mail: missing $key in .env");
+        error_log("send-mail: missing $key (not in the site's credentials token, nor in .env)");
         respond(500, ['ok' => false, 'error' => 'config']);
     }
 }
@@ -113,7 +117,9 @@ $type = field($input, 'type', 10);
 $name = field($input, 'name', 80);
 if ($name === '' || !in_array($type, ['rsvp', 'wish'], true)) respond(400, ['ok' => false, 'error' => 'invalid']);
 
-date_default_timezone_set('Africa/Cairo');
+// The site names its email template (a folder in templates/); an unknown or missing name gets templates/default
+[$templateDir, $templateData] = load_template(field($input, 'template', 64));
+date_default_timezone_set(is_string($templateData['timezone'] ?? null) && in_array($templateData['timezone'], timezone_identifiers_list(), true) ? $templateData['timezone'] : 'Africa/Cairo');
 $quote = null;
 if ($type === 'rsvp') {
     $attending = field($input, 'attending', 3) === 'no' ? 'no' : 'yes';
@@ -122,19 +128,19 @@ if ($type === 'rsvp') {
         ? "Attending: $name ($guests " . ($guests === 1 ? 'guest' : 'guests') . ')'
         : "Not attending: $name";
     $badge = $attending === 'yes'
-        ? ['سيحضر إن شاء الله', 'Attending', '#14453a', '#e3efe9']
-        : ['لن يتمكن من الحضور', 'Not attending', '#8a3b2e', '#f6e6e1'];
+        ? ['attending', 'سيحضر إن شاء الله', 'Attending']
+        : ['not_attending', 'لن يتمكن من الحضور', 'Not attending'];
     $rows = [['الاسم', 'Name', $name], ['الحضور', 'Attending', $attending === 'yes' ? 'نعم · Yes' : 'لا · No']];
     if ($attending === 'yes') $rows[] = ['عدد الحضور', 'Guests', (string) $guests];
 } else {
     $quote = field($input, 'text', 1000);
     if ($quote === '') respond(400, ['ok' => false, 'error' => 'invalid']);
     $subject = "Wishes from $name";
-    $badge = ['تهنئة جديدة', 'New wishes', '#7a5a1c', '#f5ecd9'];
+    $badge = ['wish', 'تهنئة جديدة', 'New wishes'];
     $rows = [['من', 'From', $name]];
 }
 $rows[] = ['الوقت', 'Received', date('j M Y · g:i A')];
-[$text, $html] = render_email($badge, $rows, $quote);
+[$text, $html] = render_email($templateDir, $templateData, $badge, $rows, $quote);
 
 // ---- rate limit: 6 messages per visitor per 10 minutes --------------------------------------
 
@@ -164,72 +170,83 @@ try {
     respond(502, ['ok' => false, 'error' => 'send']);
 }
 
-// ---- email template -----------------------------------------------------------------------
-// Table layout with inline styles so it renders the same in Gmail, Outlook and Apple Mail;
-// the palette matches the invitation (emerald, ivory, antique gold).
+// ---- email templates ----------------------------------------------------------------------
+// Each invitation has a folder in templates/ (see templates/README.md):
+//   email.html      the HTML email      email.txt      the plain-text version (optional)
+//   template.json   its names, date, venue, timezone and badge colours, all usable in the two files above
+// A folder without its own email.html / email.txt uses default's.
 
-function render_email(array $badge, array $rows, ?string $quote): array
+function load_template(string $name): array
 {
-    [$badgeAr, $badgeEn, $badgeInk, $badgeBg] = $badge;
-    $e = fn (string $v) => htmlspecialchars($v, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-
-    $text = "$badgeAr · $badgeEn\n\n";
-    foreach ($rows as [$ar, $en, $value]) $text .= "$ar / $en: $value\n";
-    if ($quote !== null) $text .= "\n«{$quote}»\n";
-    $text .= "\n—\nمحمود ومريم · Mahmoud & Maryam · ٥ ديسمبر ٢٠٢٦\n";
-
-    $rowsHtml = '';
-    foreach ($rows as $i => [$ar, $en, $value]) {
-        $border = $i === 0 ? '' : 'border-top:1px solid #eadfc8;';
-        $rowsHtml .= "<tr><td style=\"{$border}padding:12px 0;width:42%;vertical-align:top;text-align:right;\">"
-            . "<div style=\"font-size:14px;color:#6b6256;\">{$e($ar)}</div>"
-            . "<div style=\"font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#a89a80;text-align:right;\">{$e($en)}</div></td>"
-            . "<td style=\"{$border}padding:12px 0;vertical-align:middle;text-align:left;font-size:16px;font-weight:bold;color:#1f2a24;\"><span dir=\"auto\">{$e($value)}</span></td></tr>";
+    $base = __DIR__ . '/templates/';
+    if ($name !== '' && (!preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/', $name) || !is_dir($base . $name))) {
+        error_log("send-mail: no template \"$name\" in templates/; using default");
+        $name = '';
     }
-    $quoteHtml = $quote === null ? '' :
-        "<tr><td style=\"padding:8px 32px 4px;\"><div style=\"border-right:3px solid #b08a42;background:#fbf8f1;border-radius:8px;padding:18px 20px;\">"
-        . "<div style=\"font-family:'Amiri','Times New Roman',serif;font-size:30px;line-height:1;color:#b08a42;\">”</div>"
-        . "<div style=\"font-size:17px;line-height:1.9;color:#1f2a24;white-space:pre-wrap;\" dir=\"auto\">{$e($quote)}</div></div></td></tr>";
+    $dir = $base . ($name === '' ? 'default' : $name);
+    $data = json_decode((string) @file_get_contents("$dir/template.json"), true);
+    return [$dir, is_array($data) ? $data : []];
+}
 
-    $html = <<<HTML
-<!doctype html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>{$e($badgeEn)}</title></head>
-<body style="margin:0;padding:0;background:#efe7d6;">
-<div style="display:none;max-height:0;overflow:hidden;">{$e($badgeAr)} · {$e($badgeEn)} — {$e($rows[0][2])}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#efe7d6;padding:28px 12px;">
-<tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fffdf8;border-radius:18px;overflow:hidden;box-shadow:0 18px 40px -24px rgba(20,69,58,.45);font-family:Tahoma,'Segoe UI',Arial,sans-serif;" dir="rtl">
-  <tr><td align="center" style="background:#14453a;background-image:radial-gradient(circle at 50% 0%,#24614f 0%,#14453a 60%,#0f362d 100%);padding:34px 24px 28px;">
-    <div style="width:46px;height:46px;line-height:46px;margin:0 auto 14px;border-radius:50%;background:#d8bd82;color:#14453a;font-size:20px;">♥</div>
-    <div style="font-family:'Amiri','Times New Roman',serif;font-size:34px;line-height:1.2;color:#f6efe0;font-weight:bold;">محمود <span style="color:#d8bd82;font-weight:normal;">&amp;</span> مريم</div>
-    <div style="margin-top:6px;font-family:Georgia,'Times New Roman',serif;font-size:15px;letter-spacing:.06em;color:#d8bd82;" dir="ltr">Mahmoud &amp; Maryam</div>
-    <div style="margin-top:12px;font-size:13px;color:#cfe0d8;">السبت ٥ ديسمبر ٢٠٢٦ · <span dir="ltr">Saturday 5 December 2026</span></div>
-  </td></tr>
-  <tr><td style="height:4px;background:#d8bd82;background-image:linear-gradient(90deg,#b08a42,#e6cf98,#b08a42);"></td></tr>
-  <tr><td align="center" style="padding:28px 32px 6px;">
-    <span style="display:inline-block;padding:8px 18px;border-radius:999px;background:{$badgeBg};color:{$badgeInk};font-size:15px;font-weight:bold;">{$e($badgeAr)} <span style="opacity:.55;">·</span> <span dir="ltr">{$e($badgeEn)}</span></span>
-  </td></tr>
-  {$quoteHtml}
-  <tr><td style="padding:14px 32px 26px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">{$rowsHtml}</table>
-  </td></tr>
-  <tr><td align="center" style="background:#f6efe0;padding:18px 24px;border-top:1px solid #eadfc8;">
-    <div style="font-size:12px;color:#8a7f6c;">أُرسلت من دعوة زفاف محمود ومريم</div>
-    <div style="font-size:11px;color:#a89a80;margin-top:2px;" dir="ltr">Sent from the wedding invitation · White Plaza Askar Group, Nasr City</div>
-  </td></tr>
-</table>
-</td></tr>
-</table>
-</body></html>
-HTML;
-    return [$text, $html];
+function render_email(string $dir, array $data, array $badge, array $rows, ?string $quote): array
+{
+    [$kind, $badgeAr, $badgeEn] = $badge;
+    $colours = is_array($data['badges'][$kind] ?? null) ? $data['badges'][$kind] : [];
+    $data = array_merge($data, [
+        'badge_ar' => $badgeAr,
+        'badge_en' => $badgeEn,
+        'badge_ink' => (string) ($colours['ink'] ?? '#300A13'),
+        'badge_bg' => (string) ($colours['bg'] ?? '#E9D3A0'),
+        'guest' => $rows[0][2],
+        'quote' => $quote ?? '',
+        'rows' => array_map(fn ($row, $i) => ['label_ar' => $row[0], 'label_en' => $row[1], 'value' => $row[2], 'first' => $i === 0], $rows, array_keys($rows)),
+    ]);
+
+    $file = function (string $name) use ($dir): ?string {
+        foreach ([$dir, __DIR__ . '/templates/default'] as $folder) {
+            if (is_readable("$folder/$name")) return (string) file_get_contents("$folder/$name");
+        }
+        return null;
+    };
+    $html = $file('email.html');
+    if ($html === null) throw new RuntimeException('no email.html in templates/');
+    $html = preg_replace('/<!--.*?-->/s', '', $html) ?? $html; // the template's own notes stay out of the email
+    $text = $file('email.txt') ?? "{{badge_ar}} · {{badge_en}}\n\n{{#rows}}{{label_ar}} / {{label_en}}: {{value}}\n{{/rows}}{{#quote}}\n«{{quote}}»\n{{/quote}}";
+
+    return [
+        render_template($text, $data, fn (string $v) => $v),
+        render_template($html, $data, fn (string $v) => htmlspecialchars($v, ENT_QUOTES | ENT_HTML5, 'UTF-8')),
+    ];
+}
+
+/**
+ * A small Mustache-style template engine:
+ *   {{key}}               the value, passed through $escape (HTML-escaped for email.html)
+ *   {{#key}} … {{/key}}   repeated for each item of a list (the item's fields join the values), or shown once if
+ *                         the value is set and not empty / false
+ *   {{^key}} … {{/key}}   shown only if the value is missing, empty or false
+ */
+function render_template(string $template, array $data, callable $escape): string
+{
+    $template = preg_replace_callback('/\{\{([#^])(\w+)\}\}(.*?)\{\{\/\2\}\}/s', function (array $m) use ($data, $escape): string {
+        $value = $data[$m[2]] ?? null;
+        if ($m[1] === '^') return empty($value) ? render_template($m[3], $data, $escape) : '';
+        if (is_array($value) && array_is_list($value)) {
+            return implode('', array_map(fn ($item) => render_template($m[3], array_merge($data, (array) $item), $escape), $value));
+        }
+        return empty($value) ? '' : render_template($m[3], $data, $escape);
+    }, $template) ?? $template;
+    return preg_replace_callback('/\{\{(\w+)\}\}/', fn (array $m): string =>
+        isset($data[$m[1]]) && is_scalar($data[$m[1]]) ? $escape((string) $data[$m[1]]) : '', $template) ?? $template;
 }
 
 // ---- encrypted credentials -----------------------------------------------------------------
 
 /**
- * Token = base64url( 12-byte IV | 16-byte GCM tag | AES-256-GCM ciphertext of {"user","pass","from","to"} ).
+ * Token = base64url( 12-byte IV | 16-byte GCM tag | AES-256-GCM ciphertext of
+ *         {"host","port","secure","user","pass","from","to"} ).
  * Returns the SMTP_* values, or null if the key is missing or wrong, or the token was tampered with.
+ * host / port / secure may be missing (tokens made before they were added); .env then supplies them.
  */
 function decrypt_credentials(string $token, string $encodedKey): ?array
 {
@@ -246,6 +263,12 @@ function decrypt_credentials(string $token, string $encodedKey): ?array
         if (!isset($data[$field]) || !is_string($data[$field]) || $data[$field] === '') return null;
         $out[$name] = $data[$field];
     }
+    foreach (['host' => 'SMTP_HOST', 'port' => 'SMTP_PORT', 'secure' => 'SMTP_SECURE'] as $field => $name) {
+        if (isset($data[$field]) && is_string($data[$field]) && $data[$field] !== '') $out[$name] = $data[$field];
+    }
+    // a hostname or IP, and a real port
+    if (isset($out['SMTP_HOST']) && !preg_match('/^[A-Za-z0-9.-]{1,253}$/', $out['SMTP_HOST'])) return null;
+    if (isset($out['SMTP_PORT']) && !(ctype_digit($out['SMTP_PORT']) && (int) $out['SMTP_PORT'] >= 1 && (int) $out['SMTP_PORT'] <= 65535)) return null;
     return $out;
 }
 

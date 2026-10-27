@@ -5,7 +5,7 @@ The project is deployed in two parts:
 | Part | What | Where | Address |
 |---|---|---|---|
 | **Site** | the static invitation (`dist/client` after a build) | GitHub Pages | `https://maryamandmahmoud.com` |
-| **API** | `api/send-mail.php` + `.env` (SMTP) | Hostinger | `https://<api-host>/send-mail.php` |
+| **API** | `api/send-mail.php` + `.env` (key + allowed sites) | Hostinger | `https://<api-host>/send-mail.php` |
 
 The site calls the API to email each RSVP and wish. Deploy the **API first**: its https URL is built into the site.
 
@@ -15,32 +15,31 @@ The site calls the API to email each RSVP and wish. Deploy the **API first**: it
 
 ## Part 1 — the API
 
-Upload **`api/send-mail.php`** and **`api/.htaccess`**, plus your **`.env`**, so that `.env` sits **one folder above** `send-mail.php`:
+The API runs on its own host, separate from the site. Upload the **`api/`** folder's **`send-mail.php`**, **`.htaccess`**, **`.env`** (its own `.env`, not the site's) and **`templates/`** (the email designs; see `api/templates/README.md`):
 
 ```
-<some folder>/
-├── .env                 ← SMTP settings + ALLOWED_ORIGINS (private)
-└── <web folder>/
-    ├── send-mail.php
-    └── .htaccess
+<web folder>/
+├── send-mail.php
+├── .htaccess            ← blocks dot-files, so .env is never served
+├── .env                 ← MAIL_ENCRYPTION_KEY + ALLOWED_ORIGINS (private)
+└── templates/           ← one folder per invitation's email
 ```
 
-`send-mail.php` reads `../.env`. Keep `.env` out of any web-served folder. The `.htaccess` blocks dot-files anyway, as a safety net.
+The script reads the `.env` beside it, or else one folder above. Putting `.env` one folder above the web folder is safer still, and on **nginx** it's required, because nginx ignores `.htaccess`.
 
-**`.env` on the server needs:**
+**`.env` on the server needs only:**
 
 ```dotenv
-SMTP_HOST=…            SMTP_PORT=587    SMTP_SECURE=false
-SMTP_USER=…            SMTP_PASS=…
-SMTP_FROM="Mahmoud & Maryam Wedding <you@yourdomain.com>"
-SMTP_TO="where-rsvps-go@gmail.com"
+MAIL_ENCRYPTION_KEY=…   # the same key as in each site's .env
 ALLOWED_ORIGINS=https://maryamandmahmoud.com,https://www.maryamandmahmoud.com
 ```
+
+All SMTP settings come from the site, encrypted. See **[EMAIL.md](EMAIL.md)** for how it works and how to add another invitation.
 
 `ALLOWED_ORIGINS` lists the sites allowed to call the API from a browser. Calls from anywhere else are refused (403). `localhost` is always allowed, for development.
 
 ### On Hostinger
-Put `send-mail.php` + `.htaccess` in `public_html` (or a subdomain's folder), and `.env` in the folder **above** it (`domains/<domain>/`). The API URL is then `https://<that domain>/send-mail.php`.
+Put `send-mail.php` + `.htaccess` + `.env` in `public_html` (or a subdomain's folder). Or put `.env` in the folder **above** it (`domains/<domain>/`). The API URL is then `https://<that domain>/send-mail.php`.
 
 ### Check the API
 ```bash
@@ -77,7 +76,8 @@ Expect `{"ok":false,"error":"invalid"}`. That's correct: PHP ran and rejected th
 
 ### Updating
 - **Site text, design, song:** `npm run build` and publish `dist/client` again.
-- **SMTP or allowed sites:** edit `.env` on the server. No rebuild needed.
+- **Allowed sites:** edit `.env` on the server. No rebuild needed.
+- **An invitation's SMTP server or account:** edit that site's `.env`, rebuild, publish (see [EMAIL.md](EMAIL.md)).
 - **API URL changed:** update `.env.production`, rebuild, publish.
 
 ---
@@ -103,6 +103,7 @@ SMTP_FROM="Mahmoud & Maryam Wedding <rsvp@maryamandmahmoud.com>"
 | RSVP shows "تعذّر الإرسال" and the browser console mentions **CORS** | The site's address isn't in `ALLOWED_ORIGINS` (check exact `https://`, with or without `www`) |
 | Console shows **Mixed Content** | `VITE_MAIL_ENDPOINT` is `http://` or a bare IP. Use the https hostname and rebuild |
 | The API URL shows PHP source code | That host isn't running PHP for this folder |
-| `{"ok":false,"error":"config"}` | `.env` not found one folder above `send-mail.php`, or a value is missing or invalid. The PHP error log has a `send-mail:` line saying which |
+| `{"ok":false,"error":"config"}` | the script's `.env` not found (beside `send-mail.php` or one folder above), or an SMTP value is missing or invalid in the site's `.env` (rebuild after fixing). The PHP error log has a `send-mail:` line saying which |
+| `{"ok":false,"error":"credentials"}` | The site's `MAIL_ENCRYPTION_KEY` differs from the server's. Make them the same, rebuild the site |
 | `{"ok":false,"error":"send"}` | SMTP login, port or address problem. See the `send-mail:` line in the PHP error log. If 587 is blocked, try 465 with `SMTP_SECURE=true` |
 | Site loads but looks old | Pages can take a minute to update. Hard-refresh |

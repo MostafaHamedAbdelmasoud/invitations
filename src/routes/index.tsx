@@ -11,7 +11,6 @@ import {
 } from "react";
 import { WEDDING, siteUrl, calendarIcs } from "@/lib/wedding";
 import { STRINGS, digits, type Language } from "@/lib/invite-i18n";
-import { mount as mountJuggle } from "@/lib/juggle-game.js";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -164,6 +163,28 @@ const column = (top: number, side: number): CSSProperties => ({
   alignItems: "center",
   textAlign: "center",
 });
+/** 0…1 progress of `p` through the stretch a…b, and a gentle ease-in-out curve. */
+const seg = (p: number, a: number, b: number) => Math.min(1, Math.max(0, (p - a) / (b - a)));
+const sine = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2;
+/**
+ * The door fills the screen it's on: all the height between the guest's name at the top and the scroll hint at the
+ * bottom, and up to 86% of the width. It keeps the example's tall 1 : 1.72 shape on portrait screens and is a little
+ * broader (1 : 1.5) on landscape ones, so it fills a desktop window too.
+ */
+function doorBox(w: number, h: number) {
+  const ratio = w > h ? 1.5 : 1.72;
+  const arch = 0.104; // the stone arch's outer line rises this much of the door's width above it
+  const top = 156; // under the top bar and the guest's name
+  const room = h - top - 132; // above the scroll cue (its label and gold button)
+  const dw = Math.min(w * 0.86, room / (ratio + arch));
+  const dh = dw * ratio;
+  return {
+    left: (w - dw) / 2,
+    top: top + dw * arch + (room - dh - dw * arch) / 2,
+    width: dw,
+    height: dh,
+  };
+}
 const navyBg = (y: number) =>
   `radial-gradient(120% 75% at 50% ${y}%, #681E30 0%, #4D1422 45%, #300A13 100%)`;
 const CREAM_BG = "radial-gradient(110% 70% at 50% 35%, #FBF8F1 0%, #F6F1E6 60%, #EFE7D6 100%)";
@@ -403,12 +424,14 @@ function useStoredState<T>(key: string, initial: T) {
  * set at build time with VITE_MAIL_ENDPOINT; in `npm run dev` the default "/send-mail.php" goes to the local PHP helper.
  */
 const MAIL_ENDPOINT = import.meta.env.VITE_MAIL_ENDPOINT || "/send-mail.php";
-// Which mail account sends this invitation's emails, encrypted at build time; the script decrypts it with its key.
+// The mail server and account that send this invitation's emails, encrypted at build time (see EMAIL.md).
 const MAIL_CREDENTIALS = import.meta.env.VITE_MAIL_CREDENTIALS || "";
 type SendStatus = "idle" | "sending" | "error" | "rate";
 // When the page was opened. Bots post instantly; a guest always takes at least a moment, so the script uses this to
 // tell them apart (an autofill-proof replacement for a hidden "trap" field, which form-filler extensions fill in).
 const OPENED_AT = Date.now();
+// Which email template the script uses for this invitation (a folder in api/templates/; public, not a secret).
+const MAIL_TEMPLATE = import.meta.env.VITE_MAIL_TEMPLATE || "";
 async function sendMail(payload: Record<string, string>): Promise<"ok" | "error" | "rate"> {
   try {
     const res = await fetch(MAIL_ENDPOINT, {
@@ -417,6 +440,7 @@ async function sendMail(payload: Record<string, string>): Promise<"ok" | "error"
       body: JSON.stringify({
         ...payload,
         elapsed: String(Date.now() - OPENED_AT),
+        ...(MAIL_TEMPLATE && { template: MAIL_TEMPLATE }),
         ...(MAIL_CREDENTIALS && { credentials: MAIL_CREDENTIALS }),
       }),
     });
@@ -480,10 +504,10 @@ function Index() {
   const frameTop = h >= DESIGN_H ? (h - DESIGN_H) / 2 : (h - DESIGN_H) / 4;
   // Every screen's content stretches to the screen width, except the envelope, which keeps its 390 artwork.
   const frameW = Math.min(w, MAX_FRAME_W);
+  const doorAt = doorBox(w, h);
 
   // ---- screens, swipe & pointer effects ----
   const [screen, setScreen] = useState(0);
-  const [opened, setOpened] = useState(false);
   const [drag, setDrag] = useState(0);
   const [dragging, setDragging] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -507,44 +531,16 @@ function Index() {
     lastWheel: 0,
     slot: 0,
     envY: null as number | null,
+    envFrom: 0,
   });
   const cursor = useRef<HTMLDivElement>(null);
   const slots = useRef<(HTMLDivElement | null)[]>([]);
-  const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const light = LIGHT.has(screen);
   const go = (i: number) => {
     setScreen(Math.max(1, Math.min(SCREENS - 1, i)));
     setDrag(0);
   };
-  useEffect(() => () => clearTimeout(openTimer.current), []);
 
-  // ---- juggle game: under the cover's text, mounted while the cover is showing ----
-  const coverArch = useRef<HTMLDivElement>(null);
-  const coverText = useRef<HTMLDivElement>(null);
-  const juggle = useRef<ReturnType<typeof mountJuggle> | null>(null);
-  const langRef = useRef(lang);
-  langRef.current = lang;
-  const onCover = screen === 1;
-  useEffect(() => {
-    if (!onCover || !coverArch.current) return;
-    const game = mountJuggle(coverArch.current, {
-      below: coverText.current,
-      lang: langRef.current,
-      winHoldMs: Infinity,
-      onContinue: () => {
-        setScreen(2);
-        setDrag(0);
-      },
-    });
-    juggle.current = game;
-    return () => {
-      game.destroy();
-      juggle.current = null;
-    };
-  }, [onCover]);
-  useEffect(() => {
-    juggle.current?.setLang(lang);
-  }, [lang]);
 
   // ---- music ----
   const audio = useRef<HTMLAudioElement>(null);
@@ -560,12 +556,107 @@ function Index() {
     else playMusic();
   };
 
-  const openEnvelope = () => {
-    if (opened) return;
-    setOpened(true);
-    playMusic();
-    clearTimeout(openTimer.current);
-    openTimer.current = setTimeout(() => setScreen(1), 2100);
+  // Browsers only allow sound after a tap or key press (a mouse wheel doesn't count), so this is tried at the first
+  // such gesture on the door, and again as it finishes opening. The music button stays there either way.
+  const musicAsked = useRef(false);
+  const startMusicOnce = () => {
+    const a = audio.current;
+    if (musicAsked.current || !a) return;
+    musicAsked.current = true;
+    a.volume = 0.45;
+    a.play().catch(() => {
+      musicAsked.current = false;
+      setMusic(false);
+    });
+  };
+
+  // ---- the door: opens as you scroll (wheel, trackpad, drag, arrow keys) and closes if you scroll back ----
+  // As in example/khaled-shorouk-door.html, one progress value (0 closed … 1 walked through) drives every part of it
+  // through CSS variables. Scrolling moves a target; a loop running while the door shows glides the door after it
+  // (smoothed and speed-capped, so a hard flick or the auto-finish still sweeps open gently, never jumps).
+  // At the end you walk into the light: a glow fills the screen, the cover is put in place under it, and it clears.
+  const doorScene = useRef<HTMLDivElement>(null);
+  const doorFlash = useRef<HTMLDivElement>(null);
+  const [noSlide, setNoSlide] = useState(false);
+  const doorState = useRef({
+    target: 0,
+    shown: 0,
+    last: 0,
+    snap: undefined as ReturnType<typeof setTimeout> | undefined,
+  });
+  const paintDoor = (p: number, ajar: number) => {
+    const el = doorScene.current;
+    if (!el) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const vars = {
+      // the leaves swing (plus, while it's still shut, a slight ajar now and then, to show it opens)
+      "--open": sine(seg(p, 0.03, 0.56)) + ajar * (1 - seg(p, 0, 0.1)),
+      "--glow": sine(seg(p, 0.02, 0.45)), // light grows behind them
+      "--zoom": reduce ? 0 : sine(seg(p, 0.36, 1)), // we walk through the doorway
+      "--fade": seg(p, 0.9, 1),
+      "--kick": 1 - seg(p, 0.02, 0.2),
+      "--hint": 1 - seg(p, 0, 0.08),
+    };
+    for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v.toFixed(4));
+    if (doorFlash.current) doorFlash.current.style.opacity = sine(seg(p, 0.7, 0.97)).toFixed(4);
+  };
+  const tickDoor = (now: number) => {
+    const d = doorState.current;
+    const dt = Math.min(0.05, (now - (d.last || now)) / 1000);
+    d.last = now;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) d.shown = d.target;
+    else {
+      // ease towards the target (time constant ~0.25s), but never faster than a full opening per ~1.4s; the last
+      // stretch (walking into the light) may go faster, so the glow passes quickly instead of hanging
+      const want = (d.target - d.shown) * (1 - Math.exp(-dt / 0.25));
+      const cap = (0.7 + 1.6 * seg(d.shown, 0.6, 0.9)) * dt;
+      d.shown += Math.max(-cap, Math.min(cap, want));
+      if (Math.abs(d.target - d.shown) < 0.0004) d.shown = d.target;
+      // the last stretch is all glow; don't linger there while the easing creeps up to 1
+      if (d.target === 1 && d.shown > 0.96) d.shown = 1;
+    }
+    paintDoor(d.shown, reduce ? 0 : 0.06 * Math.max(0, Math.sin(now / 650)) ** 2);
+    if (d.shown < 1) return false;
+    // through the door: jump (not slide) to the cover under the glow, then let the glow clear
+    startMusicOnce();
+    setNoSlide(true);
+    setScreen(1);
+    const flash = doorFlash.current;
+    if (flash) {
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          flash.style.transition = "opacity .55s cubic-bezier(.3,0,.2,1)";
+          flash.style.opacity = "0";
+          setNoSlide(false);
+        }),
+      );
+    }
+    return true;
+  };
+  const tickRef = useRef(tickDoor);
+  tickRef.current = tickDoor;
+  useEffect(() => {
+    if (!ready || screen !== 0) return;
+    let raf = 0;
+    const loop = (now: number) => {
+      if (!tickRef.current(now)) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    const d = doorState.current;
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(d.snap);
+      d.last = 0;
+    };
+  }, [ready, screen]);
+  /** Moves the door to `target`; with `settle`, a door left more than half open finishes opening a moment later. */
+  const moveDoor = (target: number, settle: boolean) => {
+    const d = doorState.current;
+    if (screenRef.current !== 0 || d.shown >= 1) return;
+    d.target = Math.max(0, Math.min(1, target));
+    clearTimeout(d.snap);
+    if (settle) d.snap = setTimeout(() => d.target > 0.5 && moveDoor(1, false), 500);
   };
 
   // ---- countdown (ticks only while its screen is showing) ----
@@ -737,17 +828,21 @@ function Index() {
     const p = pointer.current;
     p.moved = false;
     cursor.current?.classList.add("press");
-    // On the envelope, a swipe up lifts it open (see onPointerUp).
-    p.envY = screen === 0 && !opened ? e.clientY : null;
+    // On the door, dragging up opens it and dragging down closes it, like scrolling (see onPointerMove).
+    p.envY = screen === 0 ? e.clientY : null;
+    p.envFrom = doorState.current.target;
     if (screen === 0 || shareOpen) return;
-    // Taps on the juggle game while the ball is in the air aren't the start of a swipe.
-    if (e.target instanceof Element && e.target.closest("input,textarea,.jg.is-playing")) return;
+    if (e.target instanceof Element && e.target.closest("input,textarea")) return;
     p.startY = e.clientY;
     p.down = true;
   };
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const p = pointer.current;
     const { x, y, nx, ny } = toDesign(e);
+    if (p.envY !== null) {
+      p.moved = Math.abs(p.envY - e.clientY) > 6;
+      moveDoor(p.envFrom + (p.envY - e.clientY) / (window.innerHeight * 1.2), false);
+    }
     const cur = cursor.current;
     if (cur) {
       cur.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
@@ -770,7 +865,10 @@ function Index() {
   const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
     const p = pointer.current;
     cursor.current?.classList.remove("press");
-    if (p.envY !== null && p.envY - e.clientY > 50 * s) openEnvelope();
+    if (p.envY !== null && p.envY !== e.clientY) {
+      startMusicOnce();
+      moveDoor(doorState.current.target, true);
+    }
     p.envY = null;
     if (!p.down) return;
     p.down = false;
@@ -790,7 +888,13 @@ function Index() {
     }
   };
   const onWheel = (e: WheelEvent<HTMLDivElement>) => {
-    if (screen === 0 || shareOpen) return;
+    if (screen === 0) {
+      // about two screens of scrolling open it fully (wheel lines and pages turned into pixels)
+      const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1);
+      moveDoor(doorState.current.target + px / (window.innerHeight * 2), true);
+      return;
+    }
+    if (shareOpen) return;
     const n = Date.now(),
       p = pointer.current;
     if (n - p.lastWheel < 650 || Math.abs(e.deltaY) < 18) return;
@@ -806,7 +910,7 @@ function Index() {
     }
     if (
       shareOpen ||
-      (e.target instanceof Element && e.target.closest("button,a,input,textarea,label,.jg"))
+      (e.target instanceof Element && e.target.closest("button,a,input,textarea,label"))
     )
       return;
     const els = slots.current.filter((el): el is HTMLDivElement => !!el);
@@ -824,16 +928,24 @@ function Index() {
   };
   const screenRef = useRef(screen);
   screenRef.current = screen;
+  // the arrow keys and space step the door a quarter of the way (kept fresh for the listener below)
+  const doorKey = useRef((step: number) => {});
+  doorKey.current = (step) => {
+    startMusicOnce();
+    moveDoor(doorState.current.target + step * 0.25, true);
+  };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (
-        screenRef.current === 0 ||
-        (e.target instanceof Element && e.target.closest("input,textarea,[role=dialog]"))
-      )
-        return;
+      if (e.target instanceof Element && e.target.closest("input,textarea,[role=dialog]")) return;
       const d = ({ ArrowDown: 1, PageDown: 1, ArrowUp: -1, PageUp: -1 } as Record<string, number>)[
         e.key
       ];
+      if (screenRef.current === 0) {
+        if (!d && e.key !== " ") return;
+        e.preventDefault();
+        doorKey.current(d ?? 1);
+        return;
+      }
       if (d) {
         e.preventDefault();
         setScreen((i) => Math.max(1, Math.min(SCREENS - 1, i + d)));
@@ -946,7 +1058,7 @@ function Index() {
             top: 0,
             width: w,
             transform: `translateY(${-screen * h + drag}px)`,
-            transition: dragging ? "none" : "transform .6s cubic-bezier(.22,.8,.2,1)",
+            transition: dragging || noSlide ? "none" : "transform .6s cubic-bezier(.22,.8,.2,1)",
           }}
         >
           {/* 0 · Door (it replaced the envelope; the old envelope is in backup-2026-10-27/index.tsx) */}
@@ -961,10 +1073,12 @@ function Index() {
               <Sparkle size={16} style={{ top: 150, left: 40 }} />
               <Sparkle size={11} style={{ top: 560, right: 36, animationDelay: "1.2s" }} />
               <Sparkle size={13} style={{ top: 650, left: 70, animationDelay: "2.4s" }} />
+            </div>
 
-              <div
-                style={{ ...column(118, 30), opacity: opened ? 0 : 1, transition: "opacity .5s" }}
-              >
+            {/* the castle door from example/khaled-shorouk-door.html, sized to the screen (see doorBox); scrolling
+                swings it open and walks through into the light. خ is on the right leaf, ش on the left. */}
+            <div ref={doorScene} className="door-scene">
+              <div style={{ ...column(76, 30), opacity: "var(--kick, 1)" }}>
                 <div style={{ fontSize: 15, color: "#E0C9CF" }}>
                   {guest ? t.guestLineFor : t.guestLineGeneral}
                 </div>
@@ -982,9 +1096,11 @@ function Index() {
                 </div>
               </div>
 
-              {/* The castle door (from example/khaled-shorouk-door.html): a tap or a swipe up swings it open and
-                  walks through into the light; خ is on the right leaf, ش on the left. */}
-              <div className={`door${opened ? " open" : ""}`} aria-hidden="true">
+              <div
+                className="door"
+                aria-hidden="true"
+                style={{ ...doorAt, "--dw": `${doorAt.width}px` } as CSSProperties}
+              >
                 <div className="dr-spill" />
                 <div className="dr-portal">
                   <div className="dr-inside">
@@ -1002,7 +1118,14 @@ function Index() {
                       <div className="dr-ring">
                         <svg viewBox="0 0 34 48">
                           <circle cx="17" cy="6" r="5" fill="#B08A45" stroke="#6E5020" />
-                          <circle cx="17" cy="28" r="14" fill="none" stroke="#E3C27E" strokeWidth="3.5" />
+                          <circle
+                            cx="17"
+                            cy="28"
+                            r="14"
+                            fill="none"
+                            stroke="#E3C27E"
+                            strokeWidth="3.5"
+                          />
                           <circle
                             cx="17"
                             cy="28"
@@ -1018,62 +1141,47 @@ function Index() {
                     </div>
                   ))}
                 </div>
-                {opened && (
-                  <div className="dr-burst">
-                    <SparkBurst />
-                  </div>
-                )}
               </div>
-              <button
-                type="button"
-                className="doorbtn"
-                aria-label={t.openInvitation}
-                onClick={openEnvelope}
-                style={{
-                  position: "absolute",
-                  top: 180,
-                  left: 60,
-                  width: 270,
-                  height: 395,
-                  zIndex: 8,
-                  padding: 0,
-                  border: 0,
-                  borderRadius: "135px 135px 18px 18px",
-                  background: "transparent",
-                  cursor: "pointer",
-                  pointerEvents: opened ? "none" : "auto",
-                }}
-              />
 
+              {/* the scroll cue: a gold button that can't be missed; scrolling opens the door, and so does pressing it */}
               <div
                 style={{
                   position: "absolute",
-                  top: 580,
+                  bottom: safe(18, "bottom"),
                   left: 0,
                   right: 0,
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  gap: 10,
-                  opacity: opened ? 0 : 1,
-                  transition: "opacity .4s",
+                  gap: 12,
+                  opacity: "var(--hint, 1)",
                 }}
               >
-                <div className="bob" aria-hidden="true" style={{ color: "#D6B06A" }}>
+                <div className="scroll-cue-label">{t.scrollDoor}</div>
+                <button
+                  type="button"
+                  className="scroll-cue"
+                  aria-label={t.scrollDoor}
+                  onClick={() => {
+                    startMusicOnce();
+                    moveDoor(1, false);
+                  }}
+                >
                   <svg
-                    width="22"
-                    height="22"
+                    aria-hidden="true"
+                    width="26"
+                    height="26"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.6"
+                    strokeWidth="2.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
-                    <path d="M12 19V5M6 11l6-6 6 6" />
+                    <path className="cue-a" d="M6 6l6 6 6-6" />
+                    <path className="cue-b" d="M6 12l6 6 6-6" />
                   </svg>
-                </div>
-                <div style={{ fontSize: 15, color: "#E0C9CF" }}>{t.tapDoor}</div>
+                </button>
               </div>
             </div>
           </section>
@@ -1083,7 +1191,6 @@ function Index() {
             <NightSky w={w} h={h} meteorDelay="6s" />
             <div className="frame">
               <div
-                ref={coverArch}
                 aria-hidden="true"
                 style={{
                   position: "absolute",
@@ -1137,7 +1244,7 @@ function Index() {
                   <path d="M165 0 L171 6 L165 12 L159 6 Z" fill="#D6B06A" />
                 </svg>
               </div>
-              <div ref={coverText} style={column(158, 40)}>
+              <div style={column(158, 40)}>
                 {guest && (
                   <div
                     className="rv"
@@ -1205,6 +1312,26 @@ function Index() {
                   </div>
                 </div>
                 <Divider className="rv t4" marginTop={16} line={56} diamond={7} />
+                {/* a short blessing where the juggle game used to be */}
+                <div
+                  className="rv t4"
+                  style={{
+                    marginTop: 34,
+                    maxWidth: 270,
+                    fontFamily: AMIRI,
+                    fontSize: 22,
+                    lineHeight: 1.75,
+                    color: "#F3E0B0",
+                  }}
+                >
+                  {t.coverBlessing}
+                </div>
+                <div
+                  className="rv t4"
+                  style={{ marginTop: 12, maxWidth: 270, fontSize: 15, lineHeight: 1.8, color: "#E0C9CF" }}
+                >
+                  {t.coverGreeting}
+                </div>
               </div>
             </div>
           </section>
@@ -2445,6 +2572,9 @@ function Index() {
             </div>
           </section>
         </div>
+
+        {/* The light you walk into through the door; it fills the screen, then clears over the cover */}
+        <div ref={doorFlash} aria-hidden="true" className="door-flash" />
 
         {/* Rose-petal bursts for taps on empty space */}
         <div aria-hidden="true" style={{ ...fill, zIndex: 25 }}>

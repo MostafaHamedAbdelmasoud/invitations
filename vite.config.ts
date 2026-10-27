@@ -8,10 +8,10 @@ import tailwindcss from "@tailwindcss/vite";
 import { encryptMailCredentials } from "./scripts/mail-credentials.mjs";
 
 /**
- * Bakes this invitation's mail account into the site as an encrypted token (VITE_MAIL_CREDENTIALS), made from
- * SMTP_USER / SMTP_PASS / SMTP_FROM / SMTP_TO and MAIL_ENCRYPTION_KEY in .env. Only the token is bundled; the key and
- * the password stay here. api/send-mail.php decrypts it with the same key. Without a key, no token is sent and the
- * script uses the account in its own .env, as before.
+ * Bakes this invitation's whole mail setup into the site as an encrypted token (VITE_MAIL_CREDENTIALS), made from
+ * SMTP_HOST / PORT / SECURE / USER / PASS / FROM / TO and MAIL_ENCRYPTION_KEY in .env. Only the token is bundled; the
+ * key and the password stay here. api/send-mail.php decrypts it with the same key (see EMAIL.md). Without a key, no
+ * token is sent and the script uses the SMTP_* values in its own .env, as before.
  */
 function mailCredentials(): Plugin {
   return {
@@ -19,14 +19,14 @@ function mailCredentials(): Plugin {
     config(_, { mode }) {
       const env = loadEnv(mode, import.meta.dirname, "");
       let token = "";
-      if (env.MAIL_ENCRYPTION_KEY) {
+      if (env["MAIL_ENCRYPTION_KEY"]) {
         try {
           token = encryptMailCredentials(env);
         } catch (e) {
           throw new Error(`[mail-credentials] ${(e as Error).message} in .env`);
         }
       } else {
-        console.warn("[mail-credentials] no MAIL_ENCRYPTION_KEY in .env: the mail API will use its own .env account.");
+        console.warn("[mail-credentials] no MAIL_ENCRYPTION_KEY in .env: the mail API will use its own .env SMTP settings.");
       }
       return { define: { "import.meta.env.VITE_MAIL_CREDENTIALS": JSON.stringify(token) } };
     },
@@ -35,7 +35,8 @@ function mailCredentials(): Plugin {
 
 /**
  * Dev only: runs api/send-mail.php with PHP's built-in server on a free port and forwards /send-mail.php to it, so
- * RSVPs and wishes really send from `npm run dev` (using the project's .env), as they will from the hosted API.
+ * RSVPs and wishes really send from `npm run dev`, as they will from the hosted API. The script reads its own
+ * api/.env (MAIL_ENCRYPTION_KEY + ALLOWED_ORIGINS), never this project's .env, just as on its server.
  */
 function phpMailDev(): Plugin {
   return {
@@ -48,7 +49,10 @@ function phpMailDev(): Plugin {
           probe.close(() => resolve(port));
         });
       });
-      const php = spawn("php", ["-S", `127.0.0.1:${port}`, "-t", "api"], { stdio: "ignore" });
+      // send-mail.php as the router: every request runs the script, so files beside it (its .env) are never served
+      const php = spawn("php", ["-S", `127.0.0.1:${port}`, "-t", "api", "api/send-mail.php"], {
+        stdio: "ignore",
+      });
       php.on("error", () => server.config.logger.warn("[php-mail-dev] PHP isn't installed, so RSVPs and wishes can't be emailed from the dev server."));
       const stop = () => php.kill();
       server.httpServer?.on("close", stop);

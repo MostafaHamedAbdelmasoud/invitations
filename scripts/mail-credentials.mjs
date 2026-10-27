@@ -1,6 +1,6 @@
-// Encrypts one invitation's mail account (SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_TO) for api/send-mail.php, so a
-// single hosted script can send for many invitations, each with its own account. SMTP_HOST/PORT/SECURE stay fixed in
-// the server's .env.
+// Encrypts one invitation's whole mail setup (SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM,
+// SMTP_TO) for api/send-mail.php, so a single hosted script can send for many invitations, each with its own mail
+// server and account. See EMAIL.md.
 //
 // The token is AES-256-GCM with MAIL_ENCRYPTION_KEY (the same key in this project's .env and the server's .env).
 // It's made at build time, so only the token reaches the public site; the key and the plain password never do.
@@ -13,9 +13,12 @@ import { createCipheriv, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-export const CREDENTIAL_KEYS = ["SMTP_USER", "SMTP_PASS", "SMTP_FROM", "SMTP_TO"];
+export const CREDENTIAL_KEYS = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "SMTP_TO"];
 
-/** Token format: base64url( 12-byte IV | 16-byte GCM tag | ciphertext of {"user","pass","from","to"} ). */
+/**
+ * Token format: base64url( 12-byte IV | 16-byte GCM tag | ciphertext of
+ * {"host","port","secure","user","pass","from","to"} ). SMTP_SECURE is optional (default "false").
+ */
 export function encryptMailCredentials(env) {
   const key = Buffer.from(env.MAIL_ENCRYPTION_KEY ?? "", "base64");
   if (key.length !== 32) throw new Error("MAIL_ENCRYPTION_KEY must be 32 bytes, base64-encoded");
@@ -23,6 +26,9 @@ export function encryptMailCredentials(env) {
   if (missing.length) throw new Error(`missing ${missing.join(", ")}`);
 
   const plain = JSON.stringify({
+    host: env.SMTP_HOST,
+    port: String(env.SMTP_PORT),
+    secure: env.SMTP_SECURE || "false",
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
     from: env.SMTP_FROM,
