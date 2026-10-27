@@ -53,7 +53,7 @@ Expect `{"ok":false,"error":"invalid"}`. That's correct: PHP ran and rejected th
 
 ## Part 2 — the site on GitHub Pages
 
-1. Build. The API's URL comes from `.env.production` (public, not a secret: `https://api.maryamandmahmoud.com/send-mail.php`):
+1. Build. The API's URL, the template and the site base all come from `config.json` (public, not secrets); the build prints what it used as a `[site-config]` line:
    ```bash
    npm run build
    ```
@@ -79,7 +79,7 @@ Expect `{"ok":false,"error":"invalid"}`. That's correct: PHP ran and rejected th
 - **Allowed sites:** edit `.env` on the server. No rebuild needed.
 - **Where a couple's mail goes:** edit `SMTP_TO` in that site's `.env`, rebuild, publish (see [EMAIL.md](EMAIL.md)).
 - **The account everything sends from:** edit `SMTP_*` in the server's `.env`. No site needs rebuilding.
-- **API URL changed:** update `.env.production`, rebuild, publish.
+- **API URL, template or site base changed:** update `config.json`, rebuild, publish.
 
 ---
 
@@ -103,7 +103,7 @@ In this site's own `.env`, check only that `SMTP_TO` is the couple's real addres
 | Symptom | Cause / fix |
 |---|---|
 | RSVP shows "تعذّر الإرسال" and the browser console mentions **CORS** | The site's address isn't in `ALLOWED_ORIGINS` (check exact `https://`, with or without `www`) |
-| Console shows **Mixed Content** | `VITE_MAIL_ENDPOINT` is `http://` or a bare IP. Use the https hostname and rebuild |
+| Build fails with `[site-config]` | `config.json` is missing, isn't valid JSON, or a value is wrong (the message says which). `endpoint` must be a full https URL |
 | The API URL shows PHP source code | That host isn't running PHP for this folder |
 | `{"ok":false,"error":"config"}` | the script's `.env` not found (beside `send-mail.php` or one folder above), or an SMTP value is missing or invalid in the site's `.env` (rebuild after fixing). The PHP error log has a `send-mail:` line saying which |
 | `{"ok":false,"error":"credentials"}` | The site's `MAIL_ENCRYPTION_KEY` differs from the server's. Make them the same, rebuild the site |

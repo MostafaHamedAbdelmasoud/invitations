@@ -93,19 +93,38 @@ Upload all of it together. Add each invitation's address to `ALLOWED_ORIGINS`. T
 
 All a couple has to give you is their email address. No password, no app password, no access to their mailbox.
 
+Settings are split by whether they're secret. **`.env` holds only the secrets** and is never committed:
+
 ```dotenv
 SMTP_TO=khaled@example.com,shorouk@example.com
-
 MAIL_ENCRYPTION_KEY=k3J…=
-VITE_MAIL_ENDPOINT=https://api.example.com/send-mail.php   # usually in .env.production
-VITE_MAIL_TEMPLATE=khaled-shorouk                          # its folder in api/templates/
 ```
 
-| Setting | Meaning |
-|---|---|
-| `SMTP_TO` | where RSVPs and wishes go: the couple's address. Separate several with commas |
-| `MAIL_ENCRYPTION_KEY` | the fixed key, identical to the server's |
-| `VITE_MAIL_TEMPLATE` | which folder in `api/templates/` styles the emails (public, not encrypted). Unknown or empty → `default` |
+**`config.json` holds the rest** and is committed, because none of it is sensitive and the build needs it to be reproducible:
+
+```json
+{
+  "template": "khaled-shorouk",
+  "base": "/khaled-shorouk/",
+  "endpoint": "https://api.example.com/send-mail.php",
+  "devEndpoint": "/send-mail.php",
+  "devApiDir": "../wedding-api-2/public"
+}
+```
+
+| Setting | Where | Meaning |
+|---|---|---|
+| `SMTP_TO` | `.env` | where RSVPs and wishes go: the couple's address. Separate several with commas |
+| `MAIL_ENCRYPTION_KEY` | `.env` | the fixed key, identical to the server's |
+| `template` | `config.json` | which folder in `api/templates/` styles the emails. Unknown or empty → `default` |
+| `base` | `config.json` | where the site is served from: `/` for its own domain, `/<repo>/` for a GitHub Pages project site |
+| `endpoint` | `config.json` | the email API's full https URL, used by `npm run build` |
+| `devEndpoint` | `config.json` | the API for `npm run dev`. A path like `/send-mail.php` is proxied to a local PHP server; a full URL goes straight there |
+| `devApiDir` | `config.json` | the folder holding `send-mail.php` for that local server. Empty to skip it |
+
+**The couple's address belongs in `.env`, not `config.json`.** This repo is public, and an address committed to it gets scraped by spam bots. The build keeps it out of the published site too, by encrypting it into the token.
+
+For a one-off build you can override `config.json` from the environment: `SITE_CONFIG`, `VITE_MAIL_ENDPOINT`, `VITE_MAIL_TEMPLATE` and `SITE_BASE` all win if set.
 
 **Sending through this invitation's own account instead.** Rarely needed, but if a couple insists their RSVPs come from their own mailbox, set `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` and `SMTP_FROM` here too. Anything you set is baked into that site's token and overrides the server's account for that site alone. Then you *are* back to holding someone's password, so prefer not to.
 

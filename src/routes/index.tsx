@@ -437,10 +437,10 @@ function useStoredState<T>(key: string, initial: T) {
 /**
  * RSVPs and wishes are emailed by the shared, hosted send-mail.php (wedding-api-2), in `npm run dev` and in production
  * alike. Everything it sends with (credentials, template) comes from this site, so the one API serves every invitation.
- * VITE_MAIL_ENDPOINT can point a build at another host.
+ * Its URL is VITE_MAIL_ENDPOINT, set in .env / .env.production; there is no default here, and the build refuses to
+ * run without it (see vite.config.ts).
  */
-const MAIL_ENDPOINT =
-  import.meta.env.VITE_MAIL_ENDPOINT || "https://api.maryamandmahmoud.com/send-mail.php";
+const MAIL_ENDPOINT = import.meta.env.VITE_MAIL_ENDPOINT;
 // Who this invitation's emails go to, encrypted at build time. The account they are sent FROM lives on the
 // mail server, so this token holds no login (see EMAIL.md).
 const MAIL_CREDENTIALS = import.meta.env.VITE_MAIL_CREDENTIALS || "";

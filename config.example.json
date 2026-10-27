@@ -1,0 +1,7 @@
+{
+  "template": "khaled-shorouk",
+  "base": "/khaled-shorouk/",
+  "endpoint": "https://api.example.com/send-mail.php",
+  "devEndpoint": "/send-mail.php",
+  "devApiDir": "../wedding-api-2/public"
+}
