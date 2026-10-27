@@ -77,24 +77,26 @@ Expect `{"ok":false,"error":"invalid"}`. That's correct: PHP ran and rejected th
 ### Updating
 - **Site text, design, song:** `npm run build` and publish `dist/client` again.
 - **Allowed sites:** edit `.env` on the server. No rebuild needed.
-- **An invitation's SMTP server or account:** edit that site's `.env`, rebuild, publish (see [EMAIL.md](EMAIL.md)).
+- **Where a couple's mail goes:** edit `SMTP_TO` in that site's `.env`, rebuild, publish (see [EMAIL.md](EMAIL.md)).
+- **The account everything sends from:** edit `SMTP_*` in the server's `.env`. No site needs rebuilding.
 - **API URL changed:** update `.env.production`, rebuild, publish.
 
 ---
 
 ## Before sending the invitations
-`.env` currently uses the **Mailtrap sandbox**, which keeps every email inside Mailtrap. Switch to a real sender, e.g. a Hostinger mailbox:
+The sending account is on the **mail server**, not here, so this is a one-time change in the server's `.env` that every invitation then uses:
 
 ```dotenv
-SMTP_HOST=smtp.hostinger.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=rsvp@maryamandmahmoud.com
+SMTP_HOST=mail.privateemail.com
+SMTP_PORT=587
+SMTP_USER=admin@vowlyeg.com
 SMTP_PASS=<mailbox password>
-SMTP_FROM="Mahmoud & Maryam Wedding <rsvp@maryamandmahmoud.com>"
+SMTP_FROM="Vowly <admin@vowlyeg.com>"
 ```
 
-`SMTP_FROM` must be the mailbox you log in with.
+`SMTP_FROM` must be the mailbox you log in with. The domain also needs **SPF, DKIM and DMARC** DNS records, or Gmail will treat the mail as spam.
+
+In this site's own `.env`, check only that `SMTP_TO` is the couple's real address.
 
 ## Troubleshooting
 

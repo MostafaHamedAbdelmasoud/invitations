@@ -435,11 +435,14 @@ function useStoredState<T>(key: string, initial: T) {
 }
 
 /**
- * RSVPs and wishes are emailed by api/send-mail.php, hosted separately from this static site. Its full https URL is
- * set at build time with VITE_MAIL_ENDPOINT; in `npm run dev` the default "/send-mail.php" goes to the local PHP helper.
+ * RSVPs and wishes are emailed by the shared, hosted send-mail.php (wedding-api-2), in `npm run dev` and in production
+ * alike. Everything it sends with (credentials, template) comes from this site, so the one API serves every invitation.
+ * VITE_MAIL_ENDPOINT can point a build at another host.
  */
-const MAIL_ENDPOINT = import.meta.env.VITE_MAIL_ENDPOINT || "/send-mail.php";
-// The mail server and account that send this invitation's emails, encrypted at build time (see EMAIL.md).
+const MAIL_ENDPOINT =
+  import.meta.env.VITE_MAIL_ENDPOINT || "https://api.maryamandmahmoud.com/send-mail.php";
+// Who this invitation's emails go to, encrypted at build time. The account they are sent FROM lives on the
+// mail server, so this token holds no login (see EMAIL.md).
 const MAIL_CREDENTIALS = import.meta.env.VITE_MAIL_CREDENTIALS || "";
 type SendStatus = "idle" | "sending" | "error" | "rate";
 // When the page was opened. Bots post instantly; a guest always takes at least a moment, so the script uses this to

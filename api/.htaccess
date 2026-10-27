@@ -1,4 +1,0 @@
-# Apache / LiteSpeed (Hostinger): never serve secrets, even if .env ends up in this folder by mistake
-<FilesMatch "^\.">
-  Require all denied
-</FilesMatch>

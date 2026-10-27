@@ -1,9 +1,12 @@
-// Encrypts one invitation's whole mail setup (SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM,
-// SMTP_TO) for api/send-mail.php, so a single hosted script can send for many invitations, each with its own mail
-// server and account. See EMAIL.md.
+// Encrypts this invitation's recipient (SMTP_TO) for api/send-mail.php, so a single hosted script can send for many
+// invitations. The sending account lives once in the mail server's .env, so an invitation never carries that
+// password and the couple never has to hand over a mailbox login of their own. See EMAIL.md.
+//
+// A site that must send through its own account can still set SMTP_HOST / PORT / SECURE / USER / PASS / FROM here;
+// whatever is set goes into the token and overrides the server's .env for that site alone.
 //
 // The token is AES-256-GCM with MAIL_ENCRYPTION_KEY (the same key in this project's .env and the server's .env).
-// It's made at build time, so only the token reaches the public site; the key and the plain password never do.
+// It's made at build time, so only the token reaches the public site; the key never does.
 // Without the key nobody can read the token, change it (e.g. point SMTP_TO elsewhere), or make one of their own.
 //
 //   node scripts/mail-credentials.mjs key     a new random MAIL_ENCRYPTION_KEY
@@ -13,11 +16,20 @@ import { createCipheriv, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-export const CREDENTIAL_KEYS = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "SMTP_TO"];
+/** All the token can carry. Only SMTP_TO is required; the rest default to the mail server's own .env. */
+export const CREDENTIAL_KEYS = ["SMTP_TO"];
+const OPTIONAL_KEYS = {
+  SMTP_HOST: "host",
+  SMTP_PORT: "port",
+  SMTP_SECURE: "secure",
+  SMTP_USER: "user",
+  SMTP_PASS: "pass",
+  SMTP_FROM: "from",
+};
 
 /**
- * Token format: base64url( 12-byte IV | 16-byte GCM tag | ciphertext of
- * {"host","port","secure","user","pass","from","to"} ). SMTP_SECURE is optional (default "false").
+ * Token format: base64url( 12-byte IV | 16-byte GCM tag | ciphertext of {"to", …} ).
+ * Only "to" is always there; host / port / secure / user / pass / from appear only if .env sets them.
  */
 export function encryptMailCredentials(env) {
   const key = Buffer.from(env.MAIL_ENCRYPTION_KEY ?? "", "base64");
@@ -26,13 +38,12 @@ export function encryptMailCredentials(env) {
   if (missing.length) throw new Error(`missing ${missing.join(", ")}`);
 
   const plain = JSON.stringify({
-    host: env.SMTP_HOST,
-    port: String(env.SMTP_PORT),
-    secure: env.SMTP_SECURE || "false",
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASS,
-    from: env.SMTP_FROM,
     to: env.SMTP_TO,
+    ...Object.fromEntries(
+      Object.entries(OPTIONAL_KEYS)
+        .filter(([name]) => env[name])
+        .map(([name, field]) => [field, String(env[name])]),
+    ),
   });
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
