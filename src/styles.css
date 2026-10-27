@@ -146,7 +146,15 @@ textarea.fd,textarea.fl{height:110px;padding:14px 16px;resize:none;line-height:1
  * Scrolling drives it, as in the example: script sets --open (leaves), --glow (light behind them), --zoom (walking
  * through) and --fade on .door-scene, all 0…1. Sizes follow the door's width, --dw, so it fits any screen. */
 .door-scene{position:absolute;inset:0;pointer-events:none}
-.door{position:absolute}
+.door{position:absolute;transform-origin:50% 50%;
+  /* split screen → centre: starts moved into the right half and scaled down to fit it (--dx, --dy, --k from
+   * doorLayout), and --center (0…1, from scrolling) carries it to the middle at full size */
+  transform:translate(calc(var(--dx,0) * (1 - var(--center,0)) * 1px),calc(var(--dy,0) * (1 - var(--center,0)) * 1px)) scale(calc(var(--k,1) + (1 - var(--k,1)) * var(--center,0)))}
+/* the scroll cue: centred across the whole screen, near the bottom; it fades as the door starts to move */
+.door-cue{position:absolute;left:0;right:0;bottom:calc(28px + env(safe-area-inset-bottom) / var(--s, 1));display:flex;flex-direction:column;align-items:center;gap:12px;opacity:var(--kick,1);z-index:2}
+/* the left half: the special invitation; it slides away to the left as the door comes to the centre */
+.door-invite{position:absolute;top:0;bottom:0;left:0;width:50%;padding:96px 6% 40px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  opacity:var(--kick,1);transform:translateX(calc((1 - var(--kick,1)) * -40px))}
 /* perspective without a shared 3D space: the leaves swing back into the room but always paint over the doorway's
  * light (in one 3D space they'd sink behind it and vanish) */
 .dr-portal{position:absolute;inset:0;perspective:1500px;perspective-origin:50% 45%;transform:scale(calc(1 + var(--zoom,0) * 2.6));opacity:calc(1 - var(--fade,0))}

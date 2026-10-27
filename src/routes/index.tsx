@@ -167,23 +167,24 @@ const column = (top: number, side: number): CSSProperties => ({
 const seg = (p: number, a: number, b: number) => Math.min(1, Math.max(0, (p - a) / (b - a)));
 const sine = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2;
 /**
- * The door fills the screen it's on: all the height between the guest's name at the top and the scroll hint at the
- * bottom, and up to 86% of the width. It keeps the example's tall 1 : 1.72 shape on portrait screens and is a little
- * broader (1 : 1.5) on landscape ones, so it fills a desktop window too.
+ * The first screen is split in two: the special invitation on the left half, the door on the right half. Scrolling
+ * glides the door to the centre while it grows to fill the screen, and only then do you walk through it.
+ * `box` is the door centred at full size (all the height under the top bar, up to 86% of the width; the example's
+ * tall 1 : 1.72 shape, a little broader, 1 : 1.5, on landscape screens). `split` is how far it starts from there:
+ * moved (dx, dy) to the middle of the right half and scaled by k to fit inside it.
  */
-function doorBox(w: number, h: number) {
+function doorLayout(w: number, h: number) {
   const ratio = w > h ? 1.5 : 1.72;
   const arch = 0.104; // the stone arch's outer line rises this much of the door's width above it
-  const top = 156; // under the top bar and the guest's name
-  const room = h - top - 132; // above the scroll cue (its label and gold button)
+  const top = 96; // under the top bar
+  const room = h - top - 40;
   const dw = Math.min(w * 0.86, room / (ratio + arch));
   const dh = dw * ratio;
-  return {
-    left: (w - dw) / 2,
-    top: top + dw * arch + (room - dh - dw * arch) / 2,
-    width: dw,
-    height: dh,
-  };
+  const box = { left: (w - dw) / 2, top: top + dw * arch + (room - dh - dw * arch) / 2, width: dw, height: dh };
+  // in the right half: centred in it, with a margin, and never bigger than it will end up
+  const k = Math.min(1, ((w / 2) * 0.92) / (dw * 1.21), (room * 0.84) / (dh + dw * arch));
+  const split = { dx: (w * 3) / 4 - w / 2, dy: 0, k };
+  return { box, split };
 }
 const navyBg = (y: number) =>
   `radial-gradient(120% 75% at 50% ${y}%, #681E30 0%, #4D1422 45%, #300A13 100%)`;
@@ -504,7 +505,7 @@ function Index() {
   const frameTop = h >= DESIGN_H ? (h - DESIGN_H) / 2 : (h - DESIGN_H) / 4;
   // Every screen's content stretches to the screen width, except the envelope, which keeps its 390 artwork.
   const frameW = Math.min(w, MAX_FRAME_W);
-  const doorAt = doorBox(w, h);
+  const door = doorLayout(w, h);
 
   // ---- screens, swipe & pointer effects ----
   const [screen, setScreen] = useState(0);
@@ -589,16 +590,18 @@ function Index() {
     if (!el) return;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const vars = {
-      // the leaves swing (plus, while it's still shut, a slight ajar now and then, to show it opens)
-      "--open": sine(seg(p, 0.03, 0.56)) + ajar * (1 - seg(p, 0, 0.1)),
-      "--glow": sine(seg(p, 0.02, 0.45)), // light grows behind them
-      "--zoom": reduce ? 0 : sine(seg(p, 0.36, 1)), // we walk through the doorway
+      // the door glides from the right half to the centre, growing to full size, as the invitation slides away
+      "--center": sine(seg(p, 0, 0.44)),
+      "--kick": 1 - sine(seg(p, 0, 0.3)),
+      // the leaves swing (plus, while it's still shut, a slight ajar now and then, to show it opens); they start
+      // once the door is well on its way to the centre, so the two motions overlap into one
+      "--open": sine(seg(p, 0.22, 0.68)) + ajar * (1 - seg(p, 0, 0.22)),
+      "--glow": sine(seg(p, 0.2, 0.6)), // light grows behind them
+      "--zoom": reduce ? 0 : sine(seg(p, 0.5, 1)), // we walk through the doorway
       "--fade": seg(p, 0.9, 1),
-      "--kick": 1 - seg(p, 0.02, 0.2),
-      "--hint": 1 - seg(p, 0, 0.08),
     };
     for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v.toFixed(4));
-    if (doorFlash.current) doorFlash.current.style.opacity = sine(seg(p, 0.7, 0.97)).toFixed(4);
+    if (doorFlash.current) doorFlash.current.style.opacity = sine(seg(p, 0.74, 0.97)).toFixed(4);
   };
   const tickDoor = (now: number) => {
     const d = doorState.current;
@@ -610,7 +613,7 @@ function Index() {
       // ease towards the target (time constant ~0.25s), but never faster than a full opening per ~1.4s; the last
       // stretch (walking into the light) may go faster, so the glow passes quickly instead of hanging
       const want = (d.target - d.shown) * (1 - Math.exp(-dt / 0.25));
-      const cap = (0.7 + 1.6 * seg(d.shown, 0.6, 0.9)) * dt;
+      const cap = (0.6 + 1.7 * seg(d.shown, 0.6, 0.9)) * dt;
       d.shown += Math.max(-cap, Math.min(cap, want));
       if (Math.abs(d.target - d.shown) < 0.0004) d.shown = d.target;
       // the last stretch is all glow; don't linger there while the easing creeps up to 1
@@ -1078,28 +1081,69 @@ function Index() {
             {/* the castle door from example/khaled-shorouk-door.html, sized to the screen (see doorBox); scrolling
                 swings it open and walks through into the light. خ is on the right leaf, ش on the left. */}
             <div ref={doorScene} className="door-scene">
-              <div style={{ ...column(76, 30), opacity: "var(--kick, 1)" }}>
+              {/* left half: the special invitation */}
+              <div className="door-invite">
                 <div style={{ fontSize: 15, color: "#E0C9CF" }}>
                   {guest ? t.guestLineFor : t.guestLineGeneral}
                 </div>
                 <div
                   className="gt"
                   style={{
-                    marginTop: 4,
+                    marginTop: 6,
                     fontFamily: AMIRI,
-                    fontSize: 40,
+                    fontSize: w < 560 ? 32 : 44,
                     lineHeight: 1.3,
                     fontWeight: 700,
                   }}
                 >
                   {guest || t.guestTitleGeneral}
                 </div>
+                <Divider className="" marginTop={18} line={40} diamond={6} />
+              </div>
+
+              {/* the gold scroll cue, in the middle of the screen (between the two halves), near the bottom */}
+              <div className="door-cue">
+                <div className="scroll-cue-label">
+                  {t.scrollDoor}
+                </div>
+                <button
+                  type="button"
+                  className="scroll-cue"
+                  aria-label={t.scrollDoor}
+                  onClick={() => {
+                    startMusicOnce();
+                    moveDoor(1, false);
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    width="26"
+                    height="26"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path className="cue-a" d="M6 6l6 6 6-6" />
+                    <path className="cue-b" d="M6 12l6 6 6-6" />
+                  </svg>
+                </button>
               </div>
 
               <div
                 className="door"
                 aria-hidden="true"
-                style={{ ...doorAt, "--dw": `${doorAt.width}px` } as CSSProperties}
+                style={
+                  {
+                    ...door.box,
+                    "--dw": `${door.box.width}px`,
+                    "--dx": door.split.dx,
+                    "--dy": door.split.dy,
+                    "--k": door.split.k,
+                  } as CSSProperties
+                }
               >
                 <div className="dr-spill" />
                 <div className="dr-portal">
@@ -1143,46 +1187,6 @@ function Index() {
                 </div>
               </div>
 
-              {/* the scroll cue: a gold button that can't be missed; scrolling opens the door, and so does pressing it */}
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: safe(18, "bottom"),
-                  left: 0,
-                  right: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 12,
-                  opacity: "var(--hint, 1)",
-                }}
-              >
-                <div className="scroll-cue-label">{t.scrollDoor}</div>
-                <button
-                  type="button"
-                  className="scroll-cue"
-                  aria-label={t.scrollDoor}
-                  onClick={() => {
-                    startMusicOnce();
-                    moveDoor(1, false);
-                  }}
-                >
-                  <svg
-                    aria-hidden="true"
-                    width="26"
-                    height="26"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path className="cue-a" d="M6 6l6 6 6-6" />
-                    <path className="cue-b" d="M6 12l6 6 6-6" />
-                  </svg>
-                </button>
-              </div>
             </div>
           </section>
 
