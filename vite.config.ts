@@ -26,7 +26,9 @@ function mailCredentials(): Plugin {
           throw new Error(`[mail-credentials] ${(e as Error).message} in .env`);
         }
       } else {
-        console.warn("[mail-credentials] no MAIL_ENCRYPTION_KEY in .env: the mail API will use its own .env SMTP settings.");
+        console.warn(
+          "[mail-credentials] no MAIL_ENCRYPTION_KEY in .env: the mail API will use its own .env SMTP settings.",
+        );
       }
       return { define: { "import.meta.env.VITE_MAIL_CREDENTIALS": JSON.stringify(token) } };
     },
@@ -53,16 +55,29 @@ function phpMailDev(): Plugin {
       const php = spawn("php", ["-S", `127.0.0.1:${port}`, "-t", "api", "api/send-mail.php"], {
         stdio: "ignore",
       });
-      php.on("error", () => server.config.logger.warn("[php-mail-dev] PHP isn't installed, so RSVPs and wishes can't be emailed from the dev server."));
+      php.on("error", () =>
+        server.config.logger.warn(
+          "[php-mail-dev] PHP isn't installed, so RSVPs and wishes can't be emailed from the dev server.",
+        ),
+      );
       const stop = () => php.kill();
       server.httpServer?.on("close", stop);
       process.once("exit", stop);
 
       server.middlewares.use("/send-mail.php", (req, res) => {
-        const upstream = request({ host: "127.0.0.1", port, path: "/send-mail.php", method: req.method, headers: req.headers }, (phpRes) => {
-          res.writeHead(phpRes.statusCode ?? 502, phpRes.headers);
-          phpRes.pipe(res);
-        });
+        const upstream = request(
+          {
+            host: "127.0.0.1",
+            port,
+            path: "/send-mail.php",
+            method: req.method,
+            headers: req.headers,
+          },
+          (phpRes) => {
+            res.writeHead(phpRes.statusCode ?? 502, phpRes.headers);
+            phpRes.pipe(res);
+          },
+        );
         upstream.on("error", () => {
           res.writeHead(502, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: false, error: "php" }));
@@ -73,10 +88,21 @@ function phpMailDev(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // Where the site is served from: "/" for a domain of its own, or "/<repo>/" for a GitHub Pages project site
+  // (https://<user>.github.io/<repo>/). Set with SITE_BASE in .env.production; every asset, link and the router
+  // follow it.
+  base: loadEnv(mode, import.meta.dirname, "")["SITE_BASE"] || "/",
   resolve: {
     alias: { "@": `${import.meta.dirname}/src` },
-    dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
+    dedupe: [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "@tanstack/react-query",
+      "@tanstack/query-core",
+    ],
   },
   plugins: [
     mailCredentials(),
@@ -90,4 +116,4 @@ export default defineConfig({
     }),
     viteReact(),
   ],
-});
+}));

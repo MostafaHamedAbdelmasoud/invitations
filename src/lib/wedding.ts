@@ -35,7 +35,8 @@ export function calendarUrl() {
 /** Guest links are built on the address the invitation is served from (?to=<name>),
  *  so they always point to this couple's own site, whatever domain it is deployed on. */
 export function siteUrl() {
-  return typeof window !== "undefined" ? window.location.origin + "/" : "";
+  // the site's own folder too (import.meta.env.BASE_URL), e.g. https://<user>.github.io/khaled-shorouk/
+  return typeof window !== "undefined" ? window.location.origin + import.meta.env.BASE_URL : "";
 }
 
 /** An all-day .ics event for 6 December 2026 (no time is confirmed yet), with a reminder the day before. */

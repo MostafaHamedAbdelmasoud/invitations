@@ -34,7 +34,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const musicSrc = "/wedding-song.mp3";
+const musicSrc = `${import.meta.env.BASE_URL}wedding-song.mp3`;
 
 /* ---- Stage sizing (see "Responsive stage" in styles.css) ---- */
 const DESIGN_W = 390;
@@ -166,6 +166,8 @@ const column = (top: number, side: number): CSSProperties => ({
 /** 0…1 progress of `p` through the stretch a…b, and a gentle ease-in-out curve. */
 const seg = (p: number, a: number, b: number) => Math.min(1, Math.max(0, (p - a) / (b - a)));
 const sine = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2;
+/** From a resting value `base` to 1 as `t` goes 0…1. */
+const openFrom = (base: number, t: number) => base + (1 - base) * t;
 /**
  * The first screen is split in two: the special invitation on the left half, the door on the right half. Scrolling
  * glides the door to the centre while it grows to fill the screen, and only then do you walk through it.
@@ -186,10 +188,17 @@ function doorLayout(w: number, h: number) {
     width: dw,
     height: dh,
   };
-  // in the right half: centred in it, with a margin, and never bigger than it will end up
-  const k = Math.min(1, ((w / 2) * 0.92) / (dw * 1.21), (room * 0.84) / (dh + dw * arch));
-  const split = { dx: (w * 3) / 4 - w / 2, dy: 0, k };
-  return { box, split };
+  // the invitation takes the left part (42% of a phone, half of anything wider) and the door the rest: centred in
+  // it, with a small margin, and never bigger than it will end up
+  const textW = w < 560 ? w * 0.42 : w / 2;
+  const doorW = w - textW;
+  const k = Math.min(1, (doorW * 0.96) / (dw * 1.21), (room * 0.96) / (dh + dw * arch));
+  const split = { dx: textW + doorW / 2 - w / 2, dy: 0, k };
+  // how far the leaves stand open at rest (0…1 of a full swing, 104°) for an ~8px gap at the seam, whatever size
+  // the door is shown at: each leaf's inner edge moves in by half the width × (1 − cos of its angle)
+  const angle = Math.acos(Math.max(0, 1 - 8 / (dw * k)));
+  const crack = Math.min(0.22, (angle * 180) / Math.PI / 104);
+  return { box, split, crack, textW };
 }
 const navyBg = (y: number) =>
   `radial-gradient(120% 75% at 50% ${y}%, #681E30 0%, #4D1422 45%, #300A13 100%)`;
@@ -557,9 +566,12 @@ function Index() {
   // ---- music ----
   const audio = useRef<HTMLAudioElement>(null);
   const [music, setMusic] = useState(false);
+  // set once the guest or the door asks for music, so the silent unlock below never pauses it
+  const musicWanted = useRef(false);
   const playMusic = () => {
     const a = audio.current;
     if (!a) return;
+    musicWanted.current = true;
     a.volume = 0.45;
     a.play().catch(() => setMusic(false));
   };
@@ -575,12 +587,35 @@ function Index() {
     const a = audio.current;
     if (musicAsked.current || !a) return;
     musicAsked.current = true;
+    musicWanted.current = true;
     a.volume = 0.45;
     a.play().catch(() => {
       musicAsked.current = false;
       setMusic(false);
     });
   };
+
+  // A mouse wheel never counts as permission for sound. So at the guest's first click, tap or key press anywhere,
+  // the song is started and paused in the same instant, inside that gesture: nothing is heard, but from then on the
+  // browser lets the door start it, however the door is opened. (It must not be muted: Safari allows muted playback
+  // anyway, so a muted start wouldn't count as permission.)
+  useEffect(() => {
+    const unlock = () => {
+      const a = audio.current;
+      if (!a || musicWanted.current) return;
+      a.play().catch(() => {}); // the immediate pause makes this promise reject; that's expected
+      a.pause();
+    };
+    const events = ["pointerdown", "keydown", "touchend"] as const;
+    const once = () => {
+      unlock();
+      for (const ev of events) window.removeEventListener(ev, once, true);
+    };
+    for (const ev of events) window.addEventListener(ev, once, true);
+    return () => {
+      for (const ev of events) window.removeEventListener(ev, once, true);
+    };
+  }, []);
 
   // ---- the door: opens as you scroll (wheel, trackpad, drag, arrow keys) and closes if you scroll back ----
   // As in example/khaled-shorouk-door.html, one progress value (0 closed … 1 walked through) drives every part of it
@@ -595,8 +630,16 @@ function Index() {
     shown: 0,
     last: 0,
     snap: undefined as ReturnType<typeof setTimeout> | undefined,
+    lastInput: 0, // when the guest last scrolled, dragged or pressed a key (for the teaser)
+    teaseAt: 0,
+    teased: false,
+    hover: false, // a mouse is over the door: it stands a little wider open (eased in hoverAmt)
+    hoverAmt: 0,
   });
-  const paintDoor = (p: number, ajar: number) => {
+  // At rest the door stands slightly open, with light showing through (doorLayout sizes it to ~8px at the seam).
+  const crack = useRef(0.12);
+  crack.current = door.crack;
+  const paintDoor = (p: number, tease: number) => {
     const el = doorScene.current;
     if (!el) return;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -604,10 +647,14 @@ function Index() {
       // the door glides from the right half to the centre, growing to full size, as the invitation slides away
       "--center": sine(seg(p, 0, 0.44)),
       "--kick": 1 - sine(seg(p, 0, 0.3)),
-      // the leaves swing (plus, while it's still shut, a slight ajar now and then, to show it opens); they start
-      // once the door is well on its way to the centre, so the two motions overlap into one
-      "--open": sine(seg(p, 0.22, 0.68)) + ajar * (1 - seg(p, 0, 0.22)),
-      "--glow": sine(seg(p, 0.2, 0.6)), // light grows behind them
+      // the leaves swing from their resting crack (wider while the teaser plays); they start once the door is well
+      // on its way to the centre, so the two motions overlap into one
+      "--open": openFrom(
+        crack.current + 0.16 * tease * (1 - seg(p, 0, 0.1)),
+        sine(seg(p, 0.22, 0.68)),
+      ),
+      // light grows behind them: a little already shows through the crack
+      "--glow": openFrom(0.3 + 0.25 * tease * (1 - seg(p, 0, 0.1)), sine(seg(p, 0.2, 0.6))),
       "--zoom": reduce ? 0 : sine(seg(p, 0.5, 1)), // we walk through the doorway
       "--fade": seg(p, 0.9, 1),
     };
@@ -630,7 +677,25 @@ function Index() {
       // the last stretch is all glow; don't linger there while the easing creeps up to 1
       if (d.target === 1 && d.shown > 0.96) d.shown = 1;
     }
-    paintDoor(d.shown, reduce ? 0 : 0.06 * Math.max(0, Math.sin(now / 650)) ** 2);
+    // the teaser: after 2.5s with no input the door creaks a little wider and settles back (every 8s while idle),
+    // showing that it opens; a tap on the door plays it too (see showDoorTip)
+    if (!d.lastInput) d.lastInput = now;
+    let tease = 0;
+    if (reduce || d.target !== 0 || d.shown !== 0) d.teaseAt = 0;
+    else if (!d.teaseAt && now - d.lastInput > (d.teased ? 8000 : 2500)) d.teaseAt = now;
+    if (d.teaseAt) {
+      const t = (now - d.teaseAt) / 1600;
+      if (t >= 1) {
+        d.teaseAt = 0;
+        d.teased = true;
+        d.lastInput = now;
+      } else tease = Math.sin(Math.PI * t) ** 2;
+    }
+    // hovering holds the door a little wider open, easing in and out
+    const hoverWant = d.hover && d.target === 0 && !reduce ? 1 : 0;
+    d.hoverAmt += (hoverWant - d.hoverAmt) * (1 - Math.exp(-dt / 0.18));
+    if (d.hover) d.lastInput = now; // no teaser while the guest is already on the door
+    paintDoor(d.shown, Math.max(tease, d.hoverAmt));
     if (d.shown < 1) return false;
     // through the door: jump (not slide) to the cover under the glow, then let the glow clear
     startMusicOnce();
@@ -664,11 +729,36 @@ function Index() {
       d.last = 0;
     };
   }, [ready, screen]);
+  // A mouse over the door: the door stands a little wider open and the same instruction shows, while it stays.
+  const [doorHover, setDoorHover] = useState(false);
+  const setHover = (over: boolean) => {
+    if (doorState.current.hover === over) return;
+    doorState.current.hover = over;
+    setDoorHover(over);
+  };
+  // A tap on the door (it doesn't open on a tap) dims it a moment and shows how to open it, with the teaser.
+  const [doorTip, setDoorTip] = useState(false);
+  const doorTipTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const showDoorTip = () => {
+    setDoorTip(true);
+    clearTimeout(doorTipTimer.current);
+    doorTipTimer.current = setTimeout(() => setDoorTip(false), 2600);
+    const d = doorState.current;
+    if (d.target === 0 && d.shown === 0) d.teaseAt = performance.now();
+  };
+  useEffect(() => () => clearTimeout(doorTipTimer.current), []);
   /** Moves the door to `target`; with `settle`, a door left more than half open finishes opening a moment later. */
   const moveDoor = (target: number, settle: boolean) => {
     const d = doorState.current;
     if (screenRef.current !== 0 || d.shown >= 1) return;
     d.target = Math.max(0, Math.min(1, target));
+    d.lastInput = performance.now();
+    // the door is opening: the "swipe up to open" instruction has done its job
+    if (d.target > 0) {
+      clearTimeout(doorTipTimer.current);
+      setDoorTip(false);
+      setHover(false);
+    }
     clearTimeout(d.snap);
     if (settle) d.snap = setTimeout(() => d.target > 0.5 && moveDoor(1, false), 500);
   };
@@ -861,6 +951,21 @@ function Index() {
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const p = pointer.current;
     const { x, y, nx, ny } = toDesign(e);
+    if (
+      screen === 0 &&
+      e.pointerType === "mouse" &&
+      p.envY === null &&
+      doorState.current.target === 0
+    ) {
+      const r = document.querySelector(".door")?.getBoundingClientRect();
+      setHover(
+        !!r &&
+          e.clientX >= r.left &&
+          e.clientX <= r.right &&
+          e.clientY >= r.top &&
+          e.clientY <= r.bottom,
+      );
+    }
     if (p.envY !== null) {
       p.moved = Math.abs(p.envY - e.clientY) > 6;
       moveDoor(p.envFrom + (p.envY - e.clientY) / (window.innerHeight * 1.2), false);
@@ -873,7 +978,7 @@ function Index() {
       cur.classList.toggle("hot", !!target?.closest("button,a,label,.tile,.coin,.wk,.mapc"));
     }
     if (!p.down) {
-      if (screen === 1 || screen >= 4) setTilt(nx, ny);
+      if (screen <= 1 || screen >= 4) setTilt(nx, ny);
       return;
     }
     let dy = (e.clientY - p.startY) / s;
@@ -887,9 +992,21 @@ function Index() {
   const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
     const p = pointer.current;
     cursor.current?.classList.remove("press");
-    if (p.envY !== null && p.envY !== e.clientY) {
+    if (p.envY !== null && Math.abs(p.envY - e.clientY) > 6) {
       startMusicOnce();
       moveDoor(doorState.current.target, true);
+    } else if (p.envY !== null && doorState.current.target === 0) {
+      // a tap, not a drag: on the door itself, show how to open it
+      const r = document.querySelector(".door")?.getBoundingClientRect();
+      if (
+        r &&
+        e.clientX >= r.left &&
+        e.clientX <= r.right &&
+        e.clientY >= r.top &&
+        e.clientY <= r.bottom
+      ) {
+        showDoorTip();
+      }
     }
     p.envY = null;
     if (!p.down) return;
@@ -900,6 +1017,7 @@ function Index() {
     go(screen + (d < -50 ? 1 : d > 50 ? -1 : 0));
   };
   const onPointerLeave = () => {
+    setHover(false);
     cursor.current?.classList.remove("show", "hot", "press");
     setTilt(0, 0);
     if (pointer.current.down) {
@@ -935,6 +1053,18 @@ function Index() {
       (e.target instanceof Element && e.target.closest("button,a,input,textarea,label"))
     )
       return;
+    // a tap on the door shows how to open it (see onPointerUp); no petals over that bubble
+    if (screen === 0) {
+      const r = document.querySelector(".door")?.getBoundingClientRect();
+      if (
+        r &&
+        e.clientX >= r.left &&
+        e.clientX <= r.right &&
+        e.clientY >= r.top &&
+        e.clientY <= r.bottom
+      )
+        return;
+    }
     const els = slots.current.filter((el): el is HTMLDivElement => !!el);
     if (!els.length) return;
     const { x, y } = toDesign(e);
@@ -1067,7 +1197,7 @@ function Index() {
           ref={audio}
           src={musicSrc}
           loop
-          preload="none"
+          preload="auto"
           onPlay={() => setMusic(true)}
           onPause={() => setMusic(false)}
           onError={() => setMusic(false)}
@@ -1101,8 +1231,8 @@ function Index() {
                 swings it open and walks through into the light. خ is on the right leaf, ش on the left. */}
             <div ref={doorScene} className="door-scene">
               {/* left half: the special invitation */}
-              <div className="door-invite">
-                <div style={{ fontSize: 15, color: "#E0C9CF" }}>
+              <div className="door-invite" style={{ width: door.textW }}>
+                <div style={{ fontSize: w < 560 ? 17 : 20, color: "#E0C9CF" }}>
                   {guest ? t.guestLineFor : t.guestLineGeneral}
                 </div>
                 <div
@@ -1110,19 +1240,40 @@ function Index() {
                   style={{
                     marginTop: 6,
                     fontFamily: AMIRI,
-                    fontSize: w < 560 ? 32 : 44,
+                    fontSize: w < 560 ? 38 : 58,
                     lineHeight: 1.3,
                     fontWeight: 700,
                   }}
                 >
                   {guest || t.guestTitleGeneral}
                 </div>
-                <Divider className="" marginTop={18} line={40} diamond={6} />
+                <Divider className="" marginTop={20} line={48} diamond={7} />
+              </div>
+
+              {/* near the top, centred: a hand swiping up says "scroll / swipe" without words, in any language */}
+              <div className="door-swipe">
+                <div className="swipe-hint" aria-hidden="true">
+                  <span className="swipe-trail" />
+                  <svg
+                    className="swipe-hand"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M22 14a8 8 0 0 1-8 8" />
+                    <path d="M18 11v-1a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                    <path d="M14 10V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1" />
+                    <path d="M10 9.5V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v10" />
+                    <path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                  </svg>
+                </div>
               </div>
 
               {/* the gold scroll cue, in the middle of the screen (between the two halves), near the bottom */}
               <div className="door-cue">
-                <div className="scroll-cue-label">{t.scrollDoor}</div>
                 <button
                   type="button"
                   className="scroll-cue"
@@ -1134,8 +1285,8 @@ function Index() {
                 >
                   <svg
                     aria-hidden="true"
-                    width="26"
-                    height="26"
+                    width="32"
+                    height="32"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -1149,8 +1300,40 @@ function Index() {
                 </button>
               </div>
 
+              {(doorTip || doorHover) && (
+                <div className="door-tip-fade">
+                  <div
+                    className={`door-tip${doorTip ? "" : " hold"}`}
+                    role="status"
+                    style={{
+                      left: Math.max(
+                        10,
+                        Math.min(w - 190, door.box.left + door.box.width / 2 + door.split.dx - 90),
+                      ),
+                      top: door.box.top + door.box.height / 2 - 34,
+                    }}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      className="door-tip-arrow"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 19V5M6 11l6-6 6 6" />
+                    </svg>
+                    {t.doorTip}
+                  </div>
+                </div>
+              )}
+
               <div
-                className="door"
+                className={`door${doorTip ? " dim" : ""}`}
                 aria-hidden="true"
                 style={
                   {
@@ -1175,28 +1358,6 @@ function Index() {
                       <div className="dr-studs" />
                       <div className="dr-medal">
                         <span>{side === "left" ? "ش" : "خ"}</span>
-                      </div>
-                      <div className="dr-ring">
-                        <svg viewBox="0 0 34 48">
-                          <circle cx="17" cy="6" r="5" fill="#B08A45" stroke="#6E5020" />
-                          <circle
-                            cx="17"
-                            cy="28"
-                            r="14"
-                            fill="none"
-                            stroke="#E3C27E"
-                            strokeWidth="3.5"
-                          />
-                          <circle
-                            cx="17"
-                            cy="28"
-                            r="14"
-                            fill="none"
-                            stroke="#7A5C24"
-                            strokeWidth="1"
-                            strokeDasharray="2 5"
-                          />
-                        </svg>
                       </div>
                       <div className="dr-shade" />
                     </div>
