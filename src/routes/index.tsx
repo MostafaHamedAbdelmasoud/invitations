@@ -180,7 +180,12 @@ function doorLayout(w: number, h: number) {
   const room = h - top - 40;
   const dw = Math.min(w * 0.86, room / (ratio + arch));
   const dh = dw * ratio;
-  const box = { left: (w - dw) / 2, top: top + dw * arch + (room - dh - dw * arch) / 2, width: dw, height: dh };
+  const box = {
+    left: (w - dw) / 2,
+    top: top + dw * arch + (room - dh - dw * arch) / 2,
+    width: dw,
+    height: dh,
+  };
   // in the right half: centred in it, with a margin, and never bigger than it will end up
   const k = Math.min(1, ((w / 2) * 0.92) / (dw * 1.21), (room * 0.84) / (dh + dw * arch));
   const split = { dx: (w * 3) / 4 - w / 2, dy: 0, k };
@@ -433,10 +438,15 @@ type SendStatus = "idle" | "sending" | "error" | "rate";
 const OPENED_AT = Date.now();
 // Which email template the script uses for this invitation (a folder in api/templates/; public, not a secret).
 const MAIL_TEMPLATE = import.meta.env.VITE_MAIL_TEMPLATE || "";
+// How long to wait for the email API before giving up (the button unlocks and shows the error).
+const SEND_TIMEOUT_MS = 20000;
 async function sendMail(payload: Record<string, string>): Promise<"ok" | "error" | "rate"> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), SEND_TIMEOUT_MS);
   try {
     const res = await fetch(MAIL_ENDPOINT, {
       method: "POST",
+      signal: abort.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...payload,
@@ -450,6 +460,8 @@ async function sendMail(payload: Record<string, string>): Promise<"ok" | "error"
     return data?.error === "rate" ? "rate" : "error";
   } catch {
     return "error";
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -541,7 +553,6 @@ function Index() {
     setScreen(Math.max(1, Math.min(SCREENS - 1, i)));
     setDrag(0);
   };
-
 
   // ---- music ----
   const audio = useRef<HTMLAudioElement>(null);
@@ -727,6 +738,8 @@ function Index() {
   }>("wedding.rsvp.v2", { name: null, going: true, count: 1, done: false });
   const [rErr, setRErr] = useState(false);
   const [rStatus, setRStatus] = useState<SendStatus>("idle");
+  // held from the first click until the answer arrives, so nothing sends twice (see submitRsvp)
+  const rSending = useRef(false);
   const [rCelebrate, setRCelebrate] = useState(false);
   const rName = rsvp.name ?? guest;
   const submitRsvp = async () => {
@@ -735,7 +748,9 @@ function Index() {
       setRErr(true);
       return;
     }
-    if (rStatus === "sending") return;
+    // a ref, not rStatus: state only changes on the next render, so a fast double click would get past it
+    if (rSending.current) return;
+    rSending.current = true;
     setRStatus("sending");
     const result = await sendMail({
       type: "rsvp",
@@ -743,6 +758,7 @@ function Index() {
       guests: String(rsvp.count),
       attending: rsvp.going ? "yes" : "no",
     });
+    rSending.current = false;
     if (result !== "ok") {
       setRStatus(result);
       return;
@@ -772,6 +788,7 @@ function Index() {
   );
   const [wErr, setWErr] = useState(false);
   const [wStatus, setWStatus] = useState<SendStatus>("idle");
+  const wSending = useRef(false); // as rSending, for wishes
   const [wCelebrate, setWCelebrate] = useState(false);
   const wName = wish.name ?? guest;
   const sendWish = async () => {
@@ -780,9 +797,11 @@ function Index() {
       setWErr(true);
       return;
     }
-    if (wStatus === "sending") return;
+    if (wSending.current) return;
+    wSending.current = true;
     setWStatus("sending");
     const result = await sendMail({ type: "wish", name, text: wish.msg.trim() });
+    wSending.current = false;
     if (result !== "ok") {
       setWStatus(result);
       return;
@@ -1103,9 +1122,7 @@ function Index() {
 
               {/* the gold scroll cue, in the middle of the screen (between the two halves), near the bottom */}
               <div className="door-cue">
-                <div className="scroll-cue-label">
-                  {t.scrollDoor}
-                </div>
+                <div className="scroll-cue-label">{t.scrollDoor}</div>
                 <button
                   type="button"
                   className="scroll-cue"
@@ -1186,7 +1203,6 @@ function Index() {
                   ))}
                 </div>
               </div>
-
             </div>
           </section>
 
@@ -1332,7 +1348,13 @@ function Index() {
                 </div>
                 <div
                   className="rv t4"
-                  style={{ marginTop: 12, maxWidth: 270, fontSize: 15, lineHeight: 1.8, color: "#E0C9CF" }}
+                  style={{
+                    marginTop: 12,
+                    maxWidth: 270,
+                    fontSize: 15,
+                    lineHeight: 1.8,
+                    color: "#E0C9CF",
+                  }}
                 >
                   {t.coverGreeting}
                 </div>
@@ -1640,26 +1662,26 @@ function Index() {
                     <path d="M16 25 V 18.5 a 5 5 0 0 1 10 0 V 25 Z" fill="#4D1422" />
                   </svg>
                   {t.mapChip && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: 14,
-                      right: 14,
-                      padding: "6px 12px",
-                      borderRadius: 999,
-                      background: "#F6F1E6",
-                      color: "#4D1422",
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {t.mapChip}
-                  </div>
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: 14,
+                        right: 14,
+                        padding: "6px 12px",
+                        borderRadius: 999,
+                        background: "#F6F1E6",
+                        color: "#4D1422",
+                        fontSize: 12,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {t.mapChip}
+                    </div>
                   )}
                   {mapLive && (
                     <iframe
                       title={t.mapTitle}
-                      src={`https://maps.google.com/maps?q=${WEDDING.lat != null && WEDDING.lng != null ? `${WEDDING.lat},${WEDDING.lng}` : encodeURIComponent(WEDDING.mapQuery)}&z=16&hl=${lang}&output=embed`}
+                      src={WEDDING.mapEmbedUrl}
                       loading="lazy"
                       referrerPolicy="no-referrer-when-downgrade"
                       style={{
@@ -1727,7 +1749,7 @@ function Index() {
                   <button
                     type="button"
                     onClick={() => {
-                      copyText(t.addressText);
+                      copyText(WEDDING.mapUrl);
                       flashCopied("address");
                     }}
                     className="btn bol"
@@ -1951,21 +1973,26 @@ function Index() {
                     className="rv t3 btn bgold"
                     onClick={() => void submitRsvp()}
                     disabled={rStatus === "sending"}
+                    aria-busy={rStatus === "sending"}
                     style={{ marginTop: 30, width: "100%" }}
                   >
-                    <svg
-                      aria-hidden="true"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M5 12l5 5 9-10" />
-                    </svg>
+                    {rStatus === "sending" ? (
+                      <span className="btn-spin" aria-hidden="true" />
+                    ) : (
+                      <svg
+                        aria-hidden="true"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M5 12l5 5 9-10" />
+                      </svg>
+                    )}
                     {rStatus === "sending" ? t.sending : t.confirm}
                   </button>
                   {(rErr || sendFailure(rStatus)) && (
@@ -2220,23 +2247,28 @@ function Index() {
                     className="rv t3 btn bnavy"
                     onClick={() => void sendWish()}
                     disabled={wStatus === "sending"}
+                    aria-busy={wStatus === "sending"}
                     style={{ marginTop: 30, width: "100%" }}
                   >
-                    <svg
-                      aria-hidden="true"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="#D6B06A"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ transform: ar ? "scaleX(-1)" : undefined }}
-                    >
-                      <path d="M22 2L11 13" />
-                      <path d="M22 2l-7 20-4-9-9-4z" />
-                    </svg>
+                    {wStatus === "sending" ? (
+                      <span className="btn-spin" aria-hidden="true" />
+                    ) : (
+                      <svg
+                        aria-hidden="true"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#D6B06A"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{ transform: ar ? "scaleX(-1)" : undefined }}
+                      >
+                        <path d="M22 2L11 13" />
+                        <path d="M22 2l-7 20-4-9-9-4z" />
+                      </svg>
+                    )}
                     {wStatus === "sending" ? t.sending : t.sendWish}
                   </button>
                   {(wErr || sendFailure(wStatus)) && (

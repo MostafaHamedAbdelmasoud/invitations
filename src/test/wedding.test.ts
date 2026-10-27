@@ -13,7 +13,7 @@ describe("Confirmed wedding details", () => {
     expect([WEDDING.groomAr, WEDDING.brideAr]).toEqual(["خالد", "شروق"]);
   });
   it("opens the exact Google Maps link the couple supplied for Qalaat Green Plaza", () => {
-    expect(WEDDING.mapUrl).toBe("https://maps.app.goo.gl/4c6MHErBZk8yKVCw6?g_st=ic");
+    expect(WEDDING.mapUrl).toBe("https://maps.app.goo.gl/tUz6WAtgsbLfYs2q8");
     expect(WEDDING.venueAr).toBe("قلعة جرين بلازا");
   });
 });

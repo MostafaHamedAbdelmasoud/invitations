@@ -16,7 +16,10 @@ export const WEDDING = {
   lat: null as number | null,
   lng: null as number | null,
   mapQuery: "قلعة جرين بلازا",
-  mapUrl: "https://maps.app.goo.gl/4c6MHErBZk8yKVCw6?g_st=ic",
+  mapUrl: "https://maps.app.goo.gl/tUz6WAtgsbLfYs2q8",
+  // The live map in the venue card: Google's own embed code for the hall (shows its pin).
+  mapEmbedUrl:
+    "https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d6408.529831157416!2d31.188689222290034!3d29.9712168!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x1458470026d76b81%3A0x23503eb2f3c8f43f!2z2YLYp9i52Kkg2KzYsdmK2YYg2KjZhNin2LLYpw!5e1!3m2!1sar!2sus!4v1793064130876!5m2!1sar!2sus",
 };
 
 export function calendarUrl() {
