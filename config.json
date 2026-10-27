@@ -1,6 +1,6 @@
 {
   "template": "khaled-shorouk",
-  "base": "/khaled-shorouk/",
+  "base": "/",
   "endpoint": "https://api.maryamandmahmoud.com/send-mail.php",
   "devEndpoint": "/send-mail.php",
   "devApiDir": "../wedding-api-2/public"
