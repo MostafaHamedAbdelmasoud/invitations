@@ -1,7 +1,7 @@
 {
   "template": "khaled-shorouk",
   "base": "/",
-  "endpoint": "https://api.maryamandmahmoud.com/send-mail.php",
-  "devEndpoint": "/send-mail.php",
+  "endpoint": "https://vowly-api-six.vercel.app/api/send-mail",
+  "devEndpoint": "https://vowly-api-six.vercel.app/api/send-mail",
   "devApiDir": "../wedding-api-2/public"
 }
